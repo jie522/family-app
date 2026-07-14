@@ -6,6 +6,14 @@ const Stocks = {
   list() { return Store.load('stocks', []); },
   saveList(list) { Store.save('stocks', list); },
 
+  /* 寫回 Google Sheet(未啟用同步時靜默略過) */
+  sync(action, data) {
+    if (!Sheets.enabled()) return;
+    Sheets.push(action, data).then(ok => {
+      if (!ok) toast('⚠️ 同步到 Google Sheet 失敗,資料先存在手機');
+    });
+  },
+
   async init() {
     try {
       const res = await fetch('data/stocks.json', { cache: 'no-cache' });
@@ -109,8 +117,10 @@ const Stocks = {
   add(code, name) {
     const list = this.list();
     if (list.some(w => w.code === code)) { toast('已經在追蹤清單裡囉'); return; }
-    list.push({ code, name: name || code, notes: '', addedAt: Date.now() });
+    const w = { code, name: name || code, notes: '', addedAt: Date.now() };
+    list.push(w);
     this.saveList(list);
+    this.sync('upsertStock', Sheets.stockToRow(w));
     Modal.close();
     this.render();
     toast(`已加入 ${name || code}`);
@@ -169,14 +179,21 @@ const Stocks = {
 
     this.loadReport(code);
 
+    let noteTimer;
     document.getElementById('sk-notes').addEventListener('input', e => {
       w.notes = e.target.value;
       this.saveList(list);
+      clearTimeout(noteTimer);
+      noteTimer = setTimeout(() => this.sync('upsertStock', Sheets.stockToRow(w)), 1200);
     });
     document.getElementById('sk-delete').addEventListener('click', () => {
-      if (!confirm(`不再追蹤 ${q?.n || code}?`)) return;
+      const warn = Sheets.enabled()
+        ? `確定不再追蹤 ${q?.n || code} 嗎?\nGoogle Sheet 上的紀錄也會一併刪除。`
+        : `不再追蹤 ${q?.n || code}?`;
+      if (!confirm(warn)) return;
       list.splice(list.indexOf(w), 1);
       this.saveList(list);
+      this.sync('deleteStock', { code });
       Modal.close();
       this.render();
       toast('已取消追蹤');

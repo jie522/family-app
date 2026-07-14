@@ -6,6 +6,9 @@ const Sheets = {
   SHEET_ID: '1rS_foFkuoFXVdK_9QxEFUFO7cPwwbX4Y8d7HY7yvIhI',
   LOG_GID: '0',          // 第一個分頁:日期,劇名,平台,備註
   SHOW_TAB: '劇集庫',     // App 自動建立的分頁:劇的狀態/評分/海報…
+  STOCK_TAB: '股票追蹤',  // App 自動建立的分頁:代號/名稱/筆記
+  SHOW_HEADER0: '劇名',   // 用來核對真的抓到「劇集庫」分頁(見 fetchNamedTab)
+  STOCK_HEADER0: '代號',  // 用來核對真的抓到「股票追蹤」分頁
   STATUS_ZH: { want: '想看', watching: '追劇中', done: '看完' },
 
   settings() { return Store.load('settings', {}); },
@@ -19,8 +22,15 @@ const Sheets = {
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
-    if (text.trimStart().startsWith('<')) throw new Error('NOT_CSV'); // 分頁不存在時會回 HTML
+    if (text.trimStart().startsWith('<')) throw new Error('NOT_CSV'); // 極少數情況會回 HTML 錯誤頁
     return this.parseCsv(text);
+  },
+
+  /* 用「sheet=名稱」查不存在的分頁時,Google 不會報錯,而是靜默回傳第一個分頁的資料。
+   * 所以額外用表頭第一格核對,確認真的抓到目標分頁,不然視同「分頁還沒建立」。 */
+  async fetchNamedTab(tabName, expectedHeader0) {
+    const rows = await this.fetchCsv(`sheet=${encodeURIComponent(tabName)}`);
+    return (rows[0] && rows[0][0] === expectedHeader0) ? rows : null;
   },
 
   parseCsv(text) {
@@ -61,16 +71,21 @@ const Sheets = {
     return 'watching';
   },
 
-  /* 從 Sheet 拉全部資料,組成 App 的劇清單並存入本機快取 */
+  /* 從 Sheet 拉全部資料,組成 App 的劇清單/股票清單並存入本機快取 */
   async pull() {
-    // 劇集庫分頁(可能還沒建立)
-    let showRows = [];
-    try { showRows = await this.fetchCsv(`sheet=${encodeURIComponent(this.SHOW_TAB)}`); }
-    catch { showRows = []; }
-    // 觀看紀錄分頁
+    // 劇集庫分頁(可能還沒建立;null 代表分頁不存在)
+    let showRows = null;
+    try { showRows = await this.fetchNamedTab(this.SHOW_TAB, this.SHOW_HEADER0); }
+    catch { showRows = null; }
+    showRows = showRows || [];
+    // 觀看紀錄分頁(用 gid 指定,一定存在,不會有分頁名稱誤判的問題)
     let logRows = [];
     try { logRows = await this.fetchCsv(`gid=${this.LOG_GID}`); }
     catch (e) { throw new Error('READ_LOG_FAIL'); }
+    // 股票追蹤分頁(可能還沒建立;null 代表分頁不存在,保留手機上原本的清單)
+    let stockRows = null;
+    try { stockRows = await this.fetchNamedTab(this.STOCK_TAB, this.STOCK_HEADER0); }
+    catch { stockRows = null; }
 
     const shows = new Map();
     // 劇集庫:劇名,平台,狀態,評分,筆記,海報,年份,類型,簡介,TMDBID
@@ -111,10 +126,20 @@ const Sheets = {
 
     const list = [...shows.values()];
     Store.save('shows', list);
+
+    // 股票追蹤:代號,名稱,筆記
+    let stocks = null;
+    if (stockRows) {
+      stocks = stockRows.slice(1)
+        .map(([code, name, notes], i) => ({ code: (code || '').trim(), name: name || '', notes: notes || '', addedAt: i + 1 }))
+        .filter(w => w.code);
+      Store.save('stocks', stocks);
+    }
+
     const s = this.settings();
     s.lastSync = new Date().toISOString();
     Store.save('settings', s);
-    return list;
+    return { shows: list, stocks: stocks || Store.load('stocks', []) };
   },
 
   /* ---------- 寫入 ---------- */
@@ -149,16 +174,21 @@ const Sheets = {
     };
   },
 
+  stockToRow(w) {
+    return { code: w.code, name: w.name || '', notes: w.notes || '' };
+  },
+
   /* 把本機資料整批上傳(啟用同步時的搬家、或同步失敗後的補救) */
   async bulkUpload() {
-    const list = Store.load('shows', []);
-    const shows = list.map(s => this.showToRow(s));
+    const showList = Store.load('shows', []);
+    const shows = showList.map(s => this.showToRow(s));
     const logs = [];
-    for (const s of list) {
+    for (const s of showList) {
       for (const e of (s.log || [])) {
         logs.push({ date: e.date, title: s.title, platform: s.platform || '', note: e.text });
       }
     }
-    return this.push('bulk', { shows, logs });
+    const stocks = Store.load('stocks', []).map(w => this.stockToRow(w));
+    return this.push('bulk', { shows, logs, stocks });
   },
 };

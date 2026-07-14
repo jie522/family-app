@@ -89,6 +89,7 @@ async function pullAndRender() {
   try {
     await Sheets.pull();
     Shows.render();
+    Stocks.render();
     refreshSyncStatus();
     return true;
   } catch {
@@ -119,8 +120,10 @@ document.getElementById('save-script').addEventListener('click', async () => {
     syncStatus.textContent = '❌ 連不上 Apps Script,請確認部署時「誰可以存取」選了「所有人」';
     return;
   }
-  const local = Store.load('shows', []);
-  if (local.length && confirm(`連線成功!要把這支手機現有的 ${local.length} 部劇上傳到 Google Sheet 嗎?\n(家人的手機第一次啟用時選「取消」就好)`)) {
+  const localShows = Store.load('shows', []);
+  const localStocks = Store.load('stocks', []);
+  const total = localShows.length + localStocks.length;
+  if (total && confirm(`連線成功!要把這支手機現有的 ${localShows.length} 部劇 + ${localStocks.length} 檔股票上傳到 Google Sheet 嗎?\n(家人的手機第一次啟用時選「取消」就好)`)) {
     syncStatus.textContent = '上傳中…';
     await Sheets.bulkUpload();
   }

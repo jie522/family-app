@@ -11,6 +11,8 @@
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '更新時間'];
+var STOCK_TAB = '股票追蹤';
+var STOCK_HEADERS = ['代號', '名稱', '筆記', '更新時間'];
 
 function logSheet() {
   return SpreadsheetApp.getActiveSpreadsheet().getSheets()[0]; // 第一個分頁:日期,劇名,平台,備註
@@ -22,6 +24,17 @@ function showSheet() {
   if (!sh) {
     sh = ss.insertSheet(SHOW_TAB);
     sh.appendRow(SHOW_HEADERS);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function stockSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(STOCK_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(STOCK_TAB);
+    sh.appendRow(STOCK_HEADERS);
     sh.setFrozenRows(1);
   }
   return sh;
@@ -50,6 +63,8 @@ function handle(action, d) {
     case 'deleteLog':  deleteLog(d);   return { ok: true };
     case 'upsertShow': upsertShow(d);  return { ok: true };
     case 'deleteShow': deleteShow(d);  return { ok: true };
+    case 'upsertStock': upsertStock(d); return { ok: true };
+    case 'deleteStock': deleteStock(d); return { ok: true };
     case 'bulk':       bulk(d);        return { ok: true };
     default:           return { ok: false, error: 'unknown action' };
   }
@@ -123,6 +138,32 @@ function deleteShow(d) {
   }
 }
 
+/* ---------- 股票追蹤清單 ---------- */
+function stockRowValues(d) {
+  return [d.code || '', d.name || '', d.notes || '', new Date()];
+}
+
+function upsertStock(d) {
+  var sh = stockSheet();
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === String(d.code).trim()) {
+      sh.getRange(i + 1, 1, 1, STOCK_HEADERS.length).setValues([stockRowValues(d)]);
+      return;
+    }
+  }
+  sh.appendRow(stockRowValues(d));
+}
+
+function deleteStock(d) {
+  var code = String(d.code).trim();
+  var sh = stockSheet();
+  var rows = sh.getDataRange().getValues();
+  for (var i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][0]).trim() === code) sh.deleteRow(i + 1);
+  }
+}
+
 /* ---------- 整批上傳(啟用同步時搬資料) ---------- */
 function bulk(d) {
   (d.shows || []).forEach(function (s) { upsertShow(s); });
@@ -133,4 +174,5 @@ function bulk(d) {
       rows.push([l.date, l.title, l.platform || '', l.note || '']);
     }
   });
+  (d.stocks || []).forEach(function (s) { upsertStock(s); });
 }

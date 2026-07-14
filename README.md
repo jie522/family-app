@@ -33,10 +33,14 @@
 
 ## 資料存哪裡?
 
-- **追劇清單**:啟用「Google Sheet 同步」後,全家共用同一份 [追劇 Google Sheet](https://docs.google.com/spreadsheets/d/1rS_foFkuoFXVdK_9QxEFUFO7cPwwbX4Y8d7HY7yvIhI/edit)。
-  App 的新增、觀看紀錄、評分都會自動寫進 Sheet;直接在 Sheet 第一個分頁加一列(日期/劇名/平台/備註)App 也讀得到。
-- **股票追蹤清單**:存在各自手機的瀏覽器裡(之後想共用再說)。
-- 沒啟用同步時,全部資料都只在手機裡,可用設定頁的匯出/匯入搬資料。
+啟用「Google Sheet 同步」後,**追劇清單和股票追蹤清單都存在雲端**的同一份 [家庭小站 Google Sheet](https://docs.google.com/spreadsheets/d/1rS_foFkuoFXVdK_9QxEFUFO7cPwwbX4Y8d7HY7yvIhI/edit),不再只存在單一手機裡:
+
+- **追劇清單**:App 的新增、觀看紀錄、評分都會自動寫進 Sheet;直接在 Sheet 第一個分頁加一列(日期/劇名/平台/備註)App 也讀得到。
+- **股票追蹤清單**:存在「股票追蹤」分頁(代號/名稱/筆記),App 裡加入、取消追蹤、寫筆記都會同步。
+- 台股的**報價**資料(收盤價、漲跌…)本來就已經是雲端資料(GitHub Actions 每交易日更新 `data/stocks.json`),跟「追蹤清單」是兩回事——追蹤清單只是「你想關注哪幾檔」的名單。
+
+沒啟用同步時,清單資料只存在手機瀏覽器裡(localStorage),可用設定頁的匯出/匯入搬資料。
+TMDB 金鑰、Apps Script 網址這類「裝置設定」目前仍個別存在每支手機上,需要各自貼一次。
 
 ## Google Sheet 同步設定(一次性,約 5 分鐘)
 
