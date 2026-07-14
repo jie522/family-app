@@ -33,8 +33,18 @@
 
 ## 資料存哪裡?
 
-追劇清單和股票追蹤清單存在**各自手機的瀏覽器**裡(localStorage)。
-想把資料搬到另一支手機:設定頁 → 匯出資料 → 傳給家人 → 對方匯入。
+- **追劇清單**:啟用「Google Sheet 同步」後,全家共用同一份 [追劇 Google Sheet](https://docs.google.com/spreadsheets/d/1rS_foFkuoFXVdK_9QxEFUFO7cPwwbX4Y8d7HY7yvIhI/edit)。
+  App 的新增、觀看紀錄、評分都會自動寫進 Sheet;直接在 Sheet 第一個分頁加一列(日期/劇名/平台/備註)App 也讀得到。
+- **股票追蹤清單**:存在各自手機的瀏覽器裡(之後想共用再說)。
+- 沒啟用同步時,全部資料都只在手機裡,可用設定頁的匯出/匯入搬資料。
+
+## Google Sheet 同步設定(一次性,約 5 分鐘)
+
+讀取不用設定(Sheet 已開放連結檢視);要讓 App 能「寫入」,照 [apps-script/Code.gs](apps-script/Code.gs) 檔案開頭的 5 個步驟,
+在 Sheet 的「擴充功能 → Apps Script」貼上程式並部署成網頁應用程式,把網址貼到 App 設定頁即可。
+只需要 Sheet 的擁有者做一次;家人的手機貼同一個網址就能共用。
+
+注意:Sheet 需維持「知道連結的使用者可以檢視」,App 才讀得到資料。
 
 ## 本機測試
 

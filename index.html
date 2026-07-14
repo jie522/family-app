@@ -45,6 +45,18 @@
   <!-- ============ 設定 ============ -->
   <section id="page-settings" class="page">
     <div class="card">
+      <h2>Google Sheet 同步</h2>
+      <p class="hint">全家共用一份 <a href="https://docs.google.com/spreadsheets/d/1rS_foFkuoFXVdK_9QxEFUFO7cPwwbX4Y8d7HY7yvIhI/edit" target="_blank">追劇 Google Sheet</a>。
+      啟用後,在 App 裡的新增、記錄、評分都會自動寫進 Sheet,家人打開 App 也會看到同一份清單。<br>
+      啟用方式:照 <b>apps-script/Code.gs</b> 檔案開頭的 5 步驟部署,把網址貼到下面。</p>
+      <input type="url" id="script-url" placeholder="貼上 Apps Script 網頁應用程式網址 (https://script.google.com/…/exec)" autocomplete="off">
+      <div class="btn-row">
+        <button id="save-script" class="btn primary">儲存並啟用</button>
+        <button id="sync-now" class="btn">🔄 立即同步</button>
+      </div>
+      <p id="sync-status" class="hint"></p>
+    </div>
+    <div class="card">
       <h2>TMDB 電影資料庫</h2>
       <p class="hint">申請免費的 API 金鑰後,新增劇時就會自動抓海報和簡介。<br>
       申請方式:到 <a href="https://www.themoviedb.org/signup" target="_blank">themoviedb.org</a> 註冊 →
@@ -82,6 +94,7 @@
 </div>
 
 <script src="js/store.js"></script>
+<script src="js/sheets.js"></script>
 <script src="js/tmdb.js"></script>
 <script src="js/shows.js"></script>
 <script src="js/stocks.js"></script>

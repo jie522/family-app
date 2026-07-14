@@ -70,6 +70,70 @@ document.getElementById('save-tmdb').addEventListener('click', () => {
   toast(settings.tmdbKey ? '金鑰已儲存' : '金鑰已清除');
 });
 
+/* ---------- Google Sheet 同步 ---------- */
+const scriptInput = document.getElementById('script-url');
+const syncStatus = document.getElementById('sync-status');
+
+function refreshSyncStatus() {
+  const s = Store.load('settings', {});
+  if (Sheets.enabled()) {
+    scriptInput.value = Sheets.scriptUrl();
+    const t = s.lastSync ? new Date(s.lastSync).toLocaleString('zh-TW') : '尚未同步';
+    syncStatus.textContent = `✅ 同步已啟用,上次讀取:${t}`;
+  } else {
+    syncStatus.textContent = '尚未啟用,目前資料只存在這支手機';
+  }
+}
+
+async function pullAndRender() {
+  try {
+    await Sheets.pull();
+    Shows.render();
+    refreshSyncStatus();
+    return true;
+  } catch {
+    toast('⚠️ 讀取 Google Sheet 失敗,顯示手機上的資料');
+    return false;
+  }
+}
+
+document.getElementById('save-script').addEventListener('click', async () => {
+  const url = scriptInput.value.trim();
+  const settings = Store.load('settings', {});
+  if (!url) {
+    delete settings.scriptUrl;
+    Store.save('settings', settings);
+    refreshSyncStatus();
+    toast('已停用同步');
+    return;
+  }
+  if (!/^https:\/\/script\.google(?:usercontent)?\.com\//.test(url)) {
+    toast('網址看起來不對,應該是 script.google.com 開頭');
+    return;
+  }
+  settings.scriptUrl = url;
+  Store.save('settings', settings);
+  syncStatus.textContent = '測試連線中…';
+  const ok = await Sheets.push('ping', {});
+  if (!ok) {
+    syncStatus.textContent = '❌ 連不上 Apps Script,請確認部署時「誰可以存取」選了「所有人」';
+    return;
+  }
+  const local = Store.load('shows', []);
+  if (local.length && confirm(`連線成功!要把這支手機現有的 ${local.length} 部劇上傳到 Google Sheet 嗎?\n(家人的手機第一次啟用時選「取消」就好)`)) {
+    syncStatus.textContent = '上傳中…';
+    await Sheets.bulkUpload();
+  }
+  await pullAndRender();
+  toast('✅ 同步已啟用');
+});
+
+document.getElementById('sync-now').addEventListener('click', async () => {
+  syncStatus.textContent = '同步中…';
+  if (await pullAndRender()) toast('已同步最新資料');
+  else refreshSyncStatus();
+});
+
 document.getElementById('export-data').addEventListener('click', () => Store.exportAll());
 document.getElementById('import-data').addEventListener('click', () =>
   document.getElementById('import-file').click());
@@ -92,6 +156,8 @@ document.getElementById('import-file').addEventListener('change', e => {
 
 /* ---------- 啟動 ---------- */
 refreshTmdbStatus();
-Shows.render();
+refreshSyncStatus();
+Shows.render();          // 先用本機快取畫面
 Stocks.init();
 switchPage('shows');
+if (Sheets.enabled()) pullAndRender();   // 再從 Google Sheet 抓最新資料

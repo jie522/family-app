@@ -1,10 +1,19 @@
 /* 追劇清單模組 */
 const Shows = {
   STATUS: { watching: '追劇中', want: '想看', done: '看完' },
+  PLATFORMS: ['Netflix', 'Disney+', '愛奇藝', 'KKTV', 'friDay影音', 'Hami Video', 'YouTube', '電視'],
   filter: 'watching',
 
   list() { return Store.load('shows', []); },
   saveList(list) { Store.save('shows', list); },
+
+  /* 寫回 Google Sheet(未啟用同步時靜默略過) */
+  sync(action, data) {
+    if (!Sheets.enabled()) return;
+    Sheets.push(action, data).then(ok => {
+      if (!ok) toast('⚠️ 同步到 Google Sheet 失敗,資料先存在手機');
+    });
+  },
 
   render() {
     const grid = document.getElementById('show-grid');
@@ -29,6 +38,7 @@ const Shows = {
         <div class="show-card-body">
           <div class="show-card-title">${esc(s.title)}</div>
           <div class="show-card-sub"><span class="chip ${chipCls}">${this.STATUS[s.status] || ''}</span>${stars}</div>
+          ${s.platform ? `<div class="show-card-sub">${esc(s.platform)}</div>` : ''}
         </div>
       </button>`;
     }).join('');
@@ -103,10 +113,17 @@ const Shows = {
     this.renderManualForm(document.getElementById('manual-area'));
   },
 
+  platformInput(id, value = '') {
+    return `<input type="text" id="${id}" list="platform-list" placeholder="例:Netflix(可留空)" value="${esc(value)}">
+      <datalist id="platform-list">${this.PLATFORMS.map(p => `<option value="${esc(p)}">`).join('')}</datalist>`;
+  },
+
   renderManualForm(container) {
     container.innerHTML = `
       <label>名稱</label>
       <input type="text" id="m-title" placeholder="劇名或電影名">
+      <label>平台</label>
+      ${this.platformInput('m-platform')}
       <label>海報圖片網址(可留空)</label>
       <input type="url" id="m-poster" placeholder="https://…">
       <button class="btn primary block" id="m-add">加入清單</button>
@@ -117,18 +134,20 @@ const Shows = {
       this.add({
         tmdbId: null, type: 'tv', title,
         year: '', poster: container.querySelector('#m-poster').value.trim(), overview: '',
+        platform: container.querySelector('#m-platform').value.trim(),
       });
     });
   },
 
   add(item) {
     const list = this.list();
-    if (item.tmdbId && list.some(s => s.tmdbId === item.tmdbId)) {
+    if (list.some(s => s.title === item.title || (item.tmdbId && s.tmdbId === item.tmdbId))) {
       toast('這部已經在清單裡囉');
       return;
     }
     const show = {
       id: 's' + Date.now(),
+      platform: '',
       ...item,
       status: 'want',
       rating: 0,
@@ -138,6 +157,7 @@ const Shows = {
     };
     list.push(show);
     this.saveList(list);
+    this.sync('upsertShow', Sheets.showToRow(show));
     Modal.close();
     this.filter = 'want';
     syncFilterUI();
@@ -170,6 +190,9 @@ const Shows = {
           `<button data-s="${k}" class="${s.status === k ? 'active' : ''}">${v}</button>`).join('')}
       </div>
 
+      <label>平台</label>
+      ${this.platformInput('d-platform', s.platform || '')}
+
       <label>評分</label>
       <div class="stars" id="d-stars">
         ${[1, 2, 3, 4, 5].map(n => `<button data-n="${n}" class="${s.rating >= n ? 'on' : ''}">★</button>`).join('')}
@@ -189,13 +212,26 @@ const Shows = {
       <button class="btn danger block" id="d-delete">從清單移除</button>
     `);
 
+    // 任何欄位變動 → 更新劇集庫(筆記/平台打字時延遲 1.2 秒再送,避免每個字都同步)
+    let upsertTimer;
+    const syncShow = (delay = 0) => {
+      clearTimeout(upsertTimer);
+      upsertTimer = setTimeout(() => this.sync('upsertShow', Sheets.showToRow(s)), delay);
+    };
+
     // 狀態
     document.querySelectorAll('#d-status button').forEach(btn =>
       btn.addEventListener('click', () => {
         s.status = btn.dataset.s;
         document.querySelectorAll('#d-status button').forEach(b => b.classList.toggle('active', b === btn));
-        save();
+        save(); syncShow();
       }));
+
+    // 平台
+    document.getElementById('d-platform').addEventListener('input', e => {
+      s.platform = e.target.value.trim();
+      this.saveList(list); syncShow(1200);
+    });
 
     // 評分
     document.querySelectorAll('#d-stars button').forEach(btn =>
@@ -203,7 +239,7 @@ const Shows = {
         const n = +btn.dataset.n;
         s.rating = (s.rating === n) ? 0 : n;
         document.querySelectorAll('#d-stars button').forEach(b => b.classList.toggle('on', +b.dataset.n <= s.rating));
-        save();
+        save(); syncShow();
       }));
 
     // 觀看紀錄
@@ -223,6 +259,7 @@ const Shows = {
           const target = sorted[+btn.dataset.i];
           s.log = s.log.filter(e => e !== target);
           save(); renderLog();
+          this.sync('deleteLog', { date: target.date, title: s.title, note: target.text });
         }));
     };
     renderLog();
@@ -234,11 +271,13 @@ const Shows = {
       s.log = s.log || [];
       s.log.push({ date, text });
       document.getElementById('d-log-text').value = '';
+      this.sync('addLog', { date, title: s.title, platform: s.platform || '', note: text });
       // 有在看就自動轉「追劇中」
       if (s.status === 'want') {
         s.status = 'watching';
         document.querySelectorAll('#d-status button').forEach(b =>
           b.classList.toggle('active', b.dataset.s === 'watching'));
+        syncShow();
       }
       save(); renderLog();
     });
@@ -247,14 +286,19 @@ const Shows = {
     document.getElementById('d-notes').addEventListener('input', e => {
       s.notes = e.target.value;
       this.saveList(list);
+      syncShow(1200);
     });
 
     // 刪除
     document.getElementById('d-delete').addEventListener('click', () => {
-      if (!confirm(`確定要移除「${s.title}」嗎?`)) return;
+      const warn = Sheets.enabled()
+        ? `確定要移除「${s.title}」嗎?\nGoogle Sheet 上這部劇和它的觀看紀錄也會一併刪除。`
+        : `確定要移除「${s.title}」嗎?`;
+      if (!confirm(warn)) return;
       const idx = list.indexOf(s);
       list.splice(idx, 1);
       save();
+      this.sync('deleteShow', { title: s.title });
       Modal.close();
       toast('已移除');
     });
