@@ -60,7 +60,9 @@
       <h2>TMDB 電影資料庫</h2>
       <p class="hint">申請免費的 API 金鑰後,新增劇時就會自動抓海報和簡介。<br>
       申請方式:到 <a href="https://www.themoviedb.org/signup" target="_blank">themoviedb.org</a> 註冊 →
-      設定 → API → 申請 API Key(v3),把金鑰貼到下面。</p>
+      設定 → API → 申請 API Key(v3)。<br>
+      這支手機可以自己貼金鑰(下面),或者<b>只設定一次</b>就好:把金鑰存進 Apps Script 的「指令碼屬性」
+      (見 <b>apps-script/Code.gs</b> 檔案開頭選用步驟),啟用 Google Sheet 同步後全家都會自動有海報,不用每支手機各貼一次,金鑰也不會出現在公開的程式碼裡。</p>
       <input type="text" id="tmdb-key" placeholder="貼上 TMDB API Key (v3)" autocomplete="off">
       <button id="save-tmdb" class="btn primary">儲存金鑰</button>
       <p id="tmdb-status" class="hint"></p>

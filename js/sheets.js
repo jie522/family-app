@@ -142,17 +142,24 @@ const Sheets = {
     return { shows: list, stocks: stocks || Store.load('stocks', []) };
   },
 
-  /* ---------- 寫入 ---------- */
-  async push(action, data) {
+  /* ---------- 寫入 / 呼叫 ---------- */
+  /* 回傳完整 JSON(給需要拿結果的呼叫,例如 tmdbSearch);網址沒設定或連不上就丟錯 */
+  async call(action, data) {
     const url = this.scriptUrl();
-    if (!url) return false;
+    if (!url) throw new Error('NO_SCRIPT_URL');
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 避免 preflight
+      body: JSON.stringify({ action, data }),
+    });
+    return res.json();
+  },
+
+  /* 單純的寫入動作(新增/刪除/筆記…),只在乎成不成功 */
+  async push(action, data) {
+    if (!this.scriptUrl()) return false;
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 避免 preflight
-        body: JSON.stringify({ action, data }),
-      });
-      const json = await res.json();
+      const json = await this.call(action, data);
       return !!json.ok;
     } catch {
       return false;

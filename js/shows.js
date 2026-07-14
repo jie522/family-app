@@ -49,7 +49,7 @@ const Shows = {
 
   /* ---------- 新增(TMDB 搜尋) ---------- */
   openAdd() {
-    const hasKey = !!TMDB.key();
+    const hasKey = TMDB.available();
     Modal.open(`
       <button class="modal-close" data-close>✕</button>
       <h2>新增劇 / 電影</h2>

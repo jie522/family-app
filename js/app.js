@@ -58,8 +58,14 @@ const tmdbStatus = document.getElementById('tmdb-status');
 
 function refreshTmdbStatus() {
   const key = TMDB.key();
-  tmdbStatus.textContent = key ? '✅ 已設定金鑰,搜尋劇名會自動抓海報' : '尚未設定金鑰';
-  if (key) tmdbInput.value = key;
+  if (key) {
+    tmdbInput.value = key;
+    tmdbStatus.textContent = '✅ 這支手機已設定金鑰,搜尋劇名會自動抓海報';
+  } else if (Sheets.enabled()) {
+    tmdbStatus.textContent = '這支手機沒貼金鑰,會改用 Google Sheet 同步的代理(若已在 Apps Script 設定 TMDB_KEY 就能正常抓海報)';
+  } else {
+    tmdbStatus.textContent = '尚未設定金鑰';
+  }
 }
 
 document.getElementById('save-tmdb').addEventListener('click', () => {
@@ -105,6 +111,7 @@ document.getElementById('save-script').addEventListener('click', async () => {
     delete settings.scriptUrl;
     Store.save('settings', settings);
     refreshSyncStatus();
+    refreshTmdbStatus();
     toast('已停用同步');
     return;
   }
@@ -128,6 +135,7 @@ document.getElementById('save-script').addEventListener('click', async () => {
     await Sheets.bulkUpload();
   }
   await pullAndRender();
+  refreshTmdbStatus();
   toast('✅ 同步已啟用');
 });
 

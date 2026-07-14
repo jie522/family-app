@@ -7,6 +7,11 @@
  *    - 誰可以存取:所有人
  * 4. 按「部署」,授權自己的 Google 帳號,複製產生的「網頁應用程式 URL」
  * 5. 把 URL 貼到家庭小站 App 的「設定」頁 → Google Sheet 同步
+ *
+ * 選用:TMDB 海報代理(設定一次,全家都不用各自貼金鑰)
+ * 6. 左側選單齒輪圖示「專案設定」→ 拉到最下面「指令碼屬性」→ 新增指令碼屬性
+ *    屬性:TMDB_KEY,值:貼上你的 TMDB API Key(v3)
+ *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
 var SHOW_TAB = '劇集庫';
@@ -65,6 +70,7 @@ function handle(action, d) {
     case 'deleteShow': deleteShow(d);  return { ok: true };
     case 'upsertStock': upsertStock(d); return { ok: true };
     case 'deleteStock': deleteStock(d); return { ok: true };
+    case 'tmdbSearch': return tmdbSearch(d);
     case 'bulk':       bulk(d);        return { ok: true };
     default:           return { ok: false, error: 'unknown action' };
   }
@@ -162,6 +168,37 @@ function deleteStock(d) {
   for (var i = rows.length - 1; i >= 1; i--) {
     if (String(rows[i][0]).trim() === code) sh.deleteRow(i + 1);
   }
+}
+
+/* ---------- TMDB 海報代理(金鑰存在指令碼屬性,不進原始碼) ---------- */
+function tmdbSearch(d) {
+  var key = PropertiesService.getScriptProperties().getProperty('TMDB_KEY');
+  if (!key) return { ok: false, error: 'NO_KEY' };
+  var q = String(d.query || '').trim();
+  if (!q) return { ok: true, results: [] };
+
+  var url = 'https://api.themoviedb.org/3/search/multi?api_key=' + encodeURIComponent(key) +
+    '&language=zh-TW&include_adult=false&query=' + encodeURIComponent(q);
+  var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  var code = res.getResponseCode();
+  if (code === 401) return { ok: false, error: 'BAD_KEY' };
+  if (code !== 200) return { ok: false, error: 'HTTP_' + code };
+
+  var data = JSON.parse(res.getContentText());
+  var results = (data.results || [])
+    .filter(function (r) { return r.media_type === 'tv' || r.media_type === 'movie'; })
+    .slice(0, 10)
+    .map(function (r) {
+      return {
+        tmdbId: r.id,
+        type: r.media_type,
+        title: r.name || r.title || '(無標題)',
+        year: (r.first_air_date || r.release_date || '').slice(0, 4),
+        poster: r.poster_path ? 'https://image.tmdb.org/t/p/w342' + r.poster_path : '',
+        overview: r.overview || '',
+      };
+    });
+  return { ok: true, results: results };
 }
 
 /* ---------- 整批上傳(啟用同步時搬資料) ---------- */
