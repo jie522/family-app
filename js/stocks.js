@@ -126,21 +126,75 @@ const Stocks = {
     toast(`已加入 ${name || code}`);
   },
 
-  /* 讀取 reports/<代號>.md 分析報告(不存在就顯示提示) */
-  async loadReport(code) {
-    const box = document.getElementById('sk-report');
+  reportsManifest: null,
+
+  /* reports/manifest.json:{ 代號: [日期,...] },記錄每檔股票有哪些日期的報告 */
+  async loadManifest() {
+    if (this.reportsManifest) return this.reportsManifest;
+    try {
+      const res = await fetch('reports/manifest.json', { cache: 'no-cache' });
+      this.reportsManifest = res.ok ? await res.json() : {};
+    } catch { this.reportsManifest = {}; }
+    return this.reportsManifest;
+  },
+
+  /* 讀取 reports/<代號>/_about.md 公司簡介(沒有就整塊隱藏,不硬報錯) */
+  async loadAbout(code) {
+    const box = document.getElementById('sk-about');
     if (!box) return;
     try {
-      const res = await fetch(`reports/${encodeURIComponent(code)}.md`, { cache: 'no-cache' });
+      const res = await fetch(`reports/${encodeURIComponent(code)}/_about.md`, { cache: 'no-cache' });
       const text = res.ok ? await res.text() : '';
-      if (!res.ok || text.trimStart().startsWith('<')) throw new Error(); // 404 頁面是 HTML
-      if (!document.getElementById('sk-report')) return; // 彈窗已被關掉
+      if (!res.ok || text.trimStart().startsWith('<')) throw new Error();
+      if (!document.getElementById('sk-about')) return; // 彈窗已被關掉
+      box.innerHTML = mdToHtml(text);
+    } catch {
+      const el = document.getElementById('sk-about');
+      if (!el) return;
+      el.closest('.report-block')?.classList.add('hidden');
+    }
+  },
+
+  /* 讀取單一日期的分析報告內容 */
+  async loadReport(code, date) {
+    const box = document.getElementById('sk-report');
+    if (!box) return;
+    box.innerHTML = '<p class="hint">讀取中…</p>';
+    try {
+      const res = await fetch(`reports/${encodeURIComponent(code)}/${encodeURIComponent(date)}.md`, { cache: 'no-cache' });
+      const text = res.ok ? await res.text() : '';
+      if (!res.ok || text.trimStart().startsWith('<')) throw new Error();
+      if (!document.getElementById('sk-report')) return;
       box.innerHTML = mdToHtml(text);
     } catch {
       if (!document.getElementById('sk-report')) return;
-      box.innerHTML = '<p class="hint">還沒有這檔的報告。把 Markdown 檔存成 reports/' +
-        esc(code) + '.md 推上 GitHub 就會顯示在這裡。</p>';
+      box.innerHTML = '<p class="hint">這份報告讀取失敗。</p>';
     }
+  },
+
+  /* 公司簡介 + 依日期切換的分析報告,一起初始化 */
+  async loadReportsSection(code) {
+    this.loadAbout(code); // 跟報告平行載入,互不擋
+    const manifest = await this.loadManifest();
+    const dates = [...(manifest[code] || [])].sort().reverse();
+    const dateBox = document.getElementById('sk-report-dates');
+    const reportBox = document.getElementById('sk-report');
+    if (!dateBox || !reportBox) return; // 彈窗已被關掉
+
+    if (!dates.length) {
+      dateBox.innerHTML = '';
+      reportBox.innerHTML = '<p class="hint">還沒有這檔的報告。照 reports/_template.md 的步驟新增就會顯示在這裡。</p>';
+      return;
+    }
+    dateBox.innerHTML = dates.length > 1
+      ? dates.map((d, i) => `<button data-date="${esc(d)}" class="${i === 0 ? 'active' : ''}">${esc(d)}</button>`).join('')
+      : '';
+    dateBox.querySelectorAll('button').forEach(btn =>
+      btn.addEventListener('click', () => {
+        dateBox.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+        this.loadReport(code, btn.dataset.date);
+      }));
+    this.loadReport(code, dates[0]);
   },
 
   /* ---------- 詳情 ---------- */
@@ -168,7 +222,13 @@ const Stocks = {
         <div class="fact"><div class="k">殖利率</div><div class="v">${q.dy != null ? q.dy + '%' : '—'}</div></div>
       </div>` : '<p class="hint">目前沒有這檔的報價資料(部署後每交易日自動更新)</p>'}
 
+      <div class="report-block">
+        <label>公司簡介</label>
+        <div id="sk-about" class="md-body"><p class="hint">讀取中…</p></div>
+      </div>
+
       <label>分析報告</label>
+      <div class="segmented" id="sk-report-dates"></div>
       <div id="sk-report" class="md-body"><p class="hint">讀取中…</p></div>
 
       <label>我的分析筆記</label>
@@ -177,7 +237,7 @@ const Stocks = {
       <button class="btn danger block" id="sk-delete">取消追蹤</button>
     `);
 
-    this.loadReport(code);
+    this.loadReportsSection(code);
 
     let noteTimer;
     document.getElementById('sk-notes').addEventListener('input', e => {
