@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 4; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 5; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '更新時間'];
@@ -81,7 +81,12 @@ function doPost(e) {
 
 function handle(action, d) {
   switch (action) {
-    case 'ping':       return { ok: true, msg: 'pong', v: VERSION };
+    case 'ping':
+      // delOk=true 代表線上實際生效的 deleteReport 是新版(含 fmtDate)。
+      // 若編輯器裡殘留舊程式碼,舊函式會蓋掉新函式,這裡就會是 false。
+      return { ok: true, msg: 'pong', v: VERSION,
+               delOk: deleteReport.toString().indexOf('fmtDate') !== -1 };
+    case 'listReports': return listReports();
     case 'addLog':     addLog(d);      return { ok: true };
     case 'deleteLog':  deleteLog(d);   return { ok: true };
     case 'upsertShow': upsertShow(d);  return { ok: true };
@@ -221,6 +226,16 @@ function deleteReport(d) {
       sh.deleteRow(i + 1);
     }
   }
+}
+
+/* 列出報告分頁裡每一列的代號和日期(以指令碼自己看到的樣子回傳,除錯用) */
+function listReports() {
+  var rows = reportSheet().getDataRange().getValues();
+  var out = [];
+  for (var i = 1; i < rows.length; i++) {
+    out.push({ row: i + 1, code: String(rows[i][0]), date: fmtDate(rows[i][1]), title: String(rows[i][2]) });
+  }
+  return { ok: true, reports: out };
 }
 
 /* ---------- TMDB 海報代理(金鑰存在指令碼屬性,不進原始碼) ---------- */
