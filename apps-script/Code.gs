@@ -44,6 +44,8 @@ function stockSheet() {
     sh.appendRow(STOCK_HEADERS);
     sh.setFrozenRows(1);
   }
+  // 代號欄強制文字格式,避免 0050 這類 ETF 代號被自動轉成數字 50
+  sh.getRange('A:A').setNumberFormat('@');
   return sh;
 }
 
@@ -55,6 +57,7 @@ function reportSheet() {
     sh.appendRow(REPORT_HEADERS);
     sh.setFrozenRows(1);
   }
+  sh.getRange('A:A').setNumberFormat('@'); // 代號欄強制文字格式
   return sh;
 }
 
@@ -194,8 +197,9 @@ function upsertReport(d) {
   var sh = reportSheet();
   var rows = sh.getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) {
+    // 日期一定要用 fmtDate 比對:Sheets 會把「2026-07-14」自動轉成日期物件
     if (String(rows[i][0]).trim() === String(d.code).trim() &&
-        String(rows[i][1]).trim() === String(d.date).trim()) {
+        fmtDate(rows[i][1]) === fmtDate(d.date)) {
       sh.getRange(i + 1, 1, 1, REPORT_HEADERS.length).setValues([reportRowValues(d)]);
       return;
     }
@@ -208,7 +212,7 @@ function deleteReport(d) {
   var rows = sh.getDataRange().getValues();
   for (var i = rows.length - 1; i >= 1; i--) {
     if (String(rows[i][0]).trim() === String(d.code).trim() &&
-        String(rows[i][1]).trim() === String(d.date).trim()) {
+        fmtDate(rows[i][1]) === fmtDate(d.date)) {
       sh.deleteRow(i + 1);
     }
   }
