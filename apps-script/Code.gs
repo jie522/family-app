@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 5; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 6; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '更新時間'];
@@ -102,11 +102,13 @@ function handle(action, d) {
 }
 
 function fmtDate(v) {
-  if (v instanceof Date) {
+  // 不用 instanceof Date:在 Apps Script 執行環境會失效(getValues 回傳的
+  // Date 來自另一個 context),改用鴨子判斷(有 getTime 方法就是日期)
+  if (v && typeof v.getTime === 'function') {
     // 用「試算表」的時區,不用「指令碼專案」的時區——後者預設常是美國時區,
     // 跟台北差 12 小時會讓日期差一天,比對永遠失敗
     var tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
-    return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+    return Utilities.formatDate(new Date(v.getTime()), tz, 'yyyy-MM-dd');
   }
   return String(v || '').trim();
 }
