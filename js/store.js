@@ -62,6 +62,50 @@ function toast(msg) {
   setTimeout(() => t.remove(), 2300);
 }
 
+/* 極簡 Markdown → HTML(標題/粗斜體/清單/連結/引用/程式碼) */
+function mdToHtml(md) {
+  const inline = s => esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  const lines = md.replace(/<!--[\s\S]*?-->/g, '').split(/\r?\n/);
+  const out = [];
+  let inList = false, para = [];
+  const flushPara = () => {
+    if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para = []; }
+  };
+  const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    let m;
+    if (!line.trim()) { flushPara(); closeList(); continue; }
+    if ((m = line.match(/^(#{1,4})\s+(.*)/))) {
+      flushPara(); closeList();
+      const lv = m[1].length + 1; // # → h2,避免跟頁面 h1 打架
+      out.push(`<h${lv}>${inline(m[2])}</h${lv}>`);
+    } else if ((m = line.match(/^>\s?(.*)/))) {
+      flushPara(); closeList();
+      out.push(`<blockquote>${inline(m[1])}</blockquote>`);
+    } else if ((m = line.match(/^[-*]\s+(.*)/))) {
+      flushPara();
+      if (!inList) { out.push('<ul>'); inList = true; }
+      out.push(`<li>${inline(m[1])}</li>`);
+    } else if (/^---+$/.test(line.trim())) {
+      flushPara(); closeList();
+      out.push('<hr>');
+    } else {
+      closeList();
+      para.push(line.trim());
+    }
+  }
+  flushPara(); closeList();
+  return out.join('\n');
+}
+
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

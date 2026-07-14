@@ -46,6 +46,16 @@
 
 注意:Sheet 需維持「知道連結的使用者可以檢視」,App 才讀得到資料。
 
+## 股票分析報告(搭配 Obsidian / Claude)
+
+`reports/` 資料夾裡每檔股票一個 Markdown 檔(檔名 = 股票代號,如 `reports/8033.md`),
+推上 GitHub 後,App 的股票詳情頁會自動顯示。格式參考 [reports/_template.md](reports/_template.md)。
+
+建議工作流程:
+1. 用 Obsidian 把這個 repo(或 `reports/` 資料夾)加為 vault,報告直接在 Obsidian 裡寫
+2. 或請 Claude 查最新消息、直接產生/更新報告檔並推上 GitHub
+3. 手機打開 App → 股票 → 點該檔股票,就能看到報告
+
 ## 本機測試
 
 ```

@@ -116,6 +116,23 @@ const Stocks = {
     toast(`已加入 ${name || code}`);
   },
 
+  /* 讀取 reports/<代號>.md 分析報告(不存在就顯示提示) */
+  async loadReport(code) {
+    const box = document.getElementById('sk-report');
+    if (!box) return;
+    try {
+      const res = await fetch(`reports/${encodeURIComponent(code)}.md`, { cache: 'no-cache' });
+      const text = res.ok ? await res.text() : '';
+      if (!res.ok || text.trimStart().startsWith('<')) throw new Error(); // 404 頁面是 HTML
+      if (!document.getElementById('sk-report')) return; // 彈窗已被關掉
+      box.innerHTML = mdToHtml(text);
+    } catch {
+      if (!document.getElementById('sk-report')) return;
+      box.innerHTML = '<p class="hint">還沒有這檔的報告。把 Markdown 檔存成 reports/' +
+        esc(code) + '.md 推上 GitHub 就會顯示在這裡。</p>';
+    }
+  },
+
   /* ---------- 詳情 ---------- */
   openDetail(code) {
     const list = this.list();
@@ -141,11 +158,16 @@ const Stocks = {
         <div class="fact"><div class="k">殖利率</div><div class="v">${q.dy != null ? q.dy + '%' : '—'}</div></div>
       </div>` : '<p class="hint">目前沒有這檔的報價資料(部署後每交易日自動更新)</p>'}
 
+      <label>分析報告</label>
+      <div id="sk-report" class="md-body"><p class="hint">讀取中…</p></div>
+
       <label>我的分析筆記</label>
       <textarea id="sk-notes" placeholder="買賣想法、目標價、觀察重點…">${esc(w.notes)}</textarea>
 
       <button class="btn danger block" id="sk-delete">取消追蹤</button>
     `);
+
+    this.loadReport(code);
 
     document.getElementById('sk-notes').addEventListener('input', e => {
       w.notes = e.target.value;
