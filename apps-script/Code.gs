@@ -85,6 +85,7 @@ function handle(action, d) {
     case 'deleteStock': deleteStock(d); return { ok: true };
     case 'tmdbSearch': return tmdbSearch(d);
     case 'upsertReport': upsertReport(d); return { ok: true };
+    case 'deleteReport': deleteReport(d); return { ok: true };
     case 'bulk':       bulk(d);        return { ok: true };
     default:           return { ok: false, error: 'unknown action' };
   }
@@ -200,6 +201,17 @@ function upsertReport(d) {
     }
   }
   sh.appendRow(reportRowValues(d));
+}
+
+function deleteReport(d) {
+  var sh = reportSheet();
+  var rows = sh.getDataRange().getValues();
+  for (var i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][0]).trim() === String(d.code).trim() &&
+        String(rows[i][1]).trim() === String(d.date).trim()) {
+      sh.deleteRow(i + 1);
+    }
+  }
 }
 
 /* ---------- TMDB 海報代理(金鑰存在指令碼屬性,不進原始碼) ---------- */

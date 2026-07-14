@@ -190,6 +190,10 @@ const Sheets = {
     return this.push('upsertReport', { code, date, title, content });
   },
 
+  async deleteReport({ code, date }) {
+    return this.push('deleteReport', { code, date });
+  },
+
   /* 把本機資料整批上傳(啟用同步時的搬家、或同步失敗後的補救) */
   async bulkUpload() {
     const showList = Store.load('shows', []);
