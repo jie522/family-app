@@ -14,6 +14,8 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
+var VERSION = 4; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '更新時間'];
 var STOCK_TAB = '股票追蹤';
@@ -79,7 +81,7 @@ function doPost(e) {
 
 function handle(action, d) {
   switch (action) {
-    case 'ping':       return { ok: true, msg: 'pong' };
+    case 'ping':       return { ok: true, msg: 'pong', v: VERSION };
     case 'addLog':     addLog(d);      return { ok: true };
     case 'deleteLog':  deleteLog(d);   return { ok: true };
     case 'upsertShow': upsertShow(d);  return { ok: true };
@@ -96,7 +98,10 @@ function handle(action, d) {
 
 function fmtDate(v) {
   if (v instanceof Date) {
-    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    // 用「試算表」的時區,不用「指令碼專案」的時區——後者預設常是美國時區,
+    // 跟台北差 12 小時會讓日期差一天,比對永遠失敗
+    var tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+    return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
   }
   return String(v || '').trim();
 }
