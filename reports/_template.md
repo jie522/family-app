@@ -35,4 +35,6 @@ reports/
 2. 打開 reports/manifest.json,把這個日期加進對應代號的陣列裡(新的日期加在最前面)
 3. 用 Obsidian 編輯,或請 Claude 查最新消息幫你寫、順便更新 manifest.json
 4. git push 之後,App 的股票詳情頁會顯示公司簡介,並列出所有日期讓你切換查看
+5.(選用)呼叫 Sheets.pushReport({code, date, title, content}) 把這份報告鏡像一份到 Google Sheet
+   的「FAMAILY APP - 股票」分頁,方便在手機的 Google Sheets App 直接看,不用開網站
 -->

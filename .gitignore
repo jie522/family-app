@@ -1,0 +1,14 @@
+# 個人知識庫(見 CLAUDE.md)——這個 repo 是 public,這些資料夾預設不上傳,
+# 只存在這台電腦 / Obsidian 裡。想公開特定筆記時用 `git add -f <檔案>` 手動加入。
+/Raw/
+/Wiki/
+/Log/
+/Index.md
+/concepts.txt
+/entities.txt
+/sources.txt
+/processing.log
+
+# 常見系統/編輯器雜訊
+.DS_Store
+Thumbs.db

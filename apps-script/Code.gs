@@ -18,6 +18,8 @@ var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '更新時間'];
 var STOCK_TAB = '股票追蹤';
 var STOCK_HEADERS = ['代號', '名稱', '筆記', '更新時間'];
+var REPORT_TAB = 'FAMAILY APP - 股票'; // 股票分析報告鏡像(reports/ 資料夾內容的雲端備份)
+var REPORT_HEADERS = ['代號', '日期', '標題', '內容', '更新時間'];
 
 function logSheet() {
   return SpreadsheetApp.getActiveSpreadsheet().getSheets()[0]; // 第一個分頁:日期,劇名,平台,備註
@@ -40,6 +42,17 @@ function stockSheet() {
   if (!sh) {
     sh = ss.insertSheet(STOCK_TAB);
     sh.appendRow(STOCK_HEADERS);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function reportSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(REPORT_TAB);
+  if (!sh) sh = ss.insertSheet(REPORT_TAB);
+  if (sh.getLastRow() === 0) { // 分頁已存在但是空的(使用者手動建立的情況)
+    sh.appendRow(REPORT_HEADERS);
     sh.setFrozenRows(1);
   }
   return sh;
@@ -71,6 +84,7 @@ function handle(action, d) {
     case 'upsertStock': upsertStock(d); return { ok: true };
     case 'deleteStock': deleteStock(d); return { ok: true };
     case 'tmdbSearch': return tmdbSearch(d);
+    case 'upsertReport': upsertReport(d); return { ok: true };
     case 'bulk':       bulk(d);        return { ok: true };
     default:           return { ok: false, error: 'unknown action' };
   }
@@ -168,6 +182,24 @@ function deleteStock(d) {
   for (var i = rows.length - 1; i >= 1; i--) {
     if (String(rows[i][0]).trim() === code) sh.deleteRow(i + 1);
   }
+}
+
+/* ---------- 股票分析報告(reports/ 資料夾內容的雲端鏡像) ---------- */
+function reportRowValues(d) {
+  return [d.code || '', d.date || '', d.title || '', d.content || '', new Date()];
+}
+
+function upsertReport(d) {
+  var sh = reportSheet();
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === String(d.code).trim() &&
+        String(rows[i][1]).trim() === String(d.date).trim()) {
+      sh.getRange(i + 1, 1, 1, REPORT_HEADERS.length).setValues([reportRowValues(d)]);
+      return;
+    }
+  }
+  sh.appendRow(reportRowValues(d));
 }
 
 /* ---------- TMDB 海報代理(金鑰存在指令碼屬性,不進原始碼) ---------- */

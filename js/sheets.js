@@ -185,6 +185,11 @@ const Sheets = {
     return { code: w.code, name: w.name || '', notes: w.notes || '' };
   },
 
+  /* 把 reports/<代號>/<日期>.md 的內容鏡像一份到 Google Sheet(分頁「FAMAILY APP - 股票」) */
+  async pushReport({ code, date, title, content }) {
+    return this.push('upsertReport', { code, date, title, content });
+  },
+
   /* 把本機資料整批上傳(啟用同步時的搬家、或同步失敗後的補救) */
   async bulkUpload() {
     const showList = Store.load('shows', []);
