@@ -20,11 +20,11 @@ document.getElementById('modal-backdrop').addEventListener('click', e => {
 
 /* ---------- 頁籤 ---------- */
 const PAGES = {
-  shows: { title: '追劇清單', add: () => Shows.openAdd() },
   stocks: { title: '台股追蹤', add: () => Stocks.openAdd() },
+  shows: { title: '追劇清單', add: () => Shows.openAdd() },
   settings: { title: '設定', add: null },
 };
-let currentPage = 'shows';
+let currentPage = 'stocks';
 
 function switchPage(page) {
   currentPage = page;
@@ -170,5 +170,5 @@ refreshTmdbStatus();
 refreshSyncStatus();
 Shows.render();          // 先用本機快取畫面
 Stocks.init();
-switchPage('shows');
+switchPage('stocks');
 if (Sheets.enabled()) pullAndRender();   // 再從 Google Sheet 抓最新資料

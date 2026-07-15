@@ -17,8 +17,18 @@
 
 <main id="main">
 
+  <!-- ============ 股票 ============ -->
+  <section id="page-stocks" class="page active">
+    <div id="stock-meta" class="stock-meta"></div>
+    <div id="stock-list" class="stock-list"></div>
+    <div id="stock-empty" class="empty hidden">
+      <div class="empty-icon">📈</div>
+      <p>還沒有追蹤的股票<br>按右上角「＋」新增</p>
+    </div>
+  </section>
+
   <!-- ============ 追劇 ============ -->
-  <section id="page-shows" class="page active">
+  <section id="page-shows" class="page">
     <div class="segmented" id="show-filter">
       <button data-status="watching" class="active">追劇中</button>
       <button data-status="want">想看</button>
@@ -29,16 +39,6 @@
     <div id="show-empty" class="empty hidden">
       <div class="empty-icon">📺</div>
       <p>還沒有劇喔!<br>按右上角「＋」新增第一部劇</p>
-    </div>
-  </section>
-
-  <!-- ============ 股票 ============ -->
-  <section id="page-stocks" class="page">
-    <div id="stock-meta" class="stock-meta"></div>
-    <div id="stock-list" class="stock-list"></div>
-    <div id="stock-empty" class="empty hidden">
-      <div class="empty-icon">📈</div>
-      <p>還沒有追蹤的股票<br>按右上角「＋」新增</p>
     </div>
   </section>
 
@@ -85,8 +85,8 @@
 </main>
 
 <nav class="tab-bar">
-  <button class="tab active" data-page="shows"><span class="tab-icon">📺</span>追劇</button>
-  <button class="tab" data-page="stocks"><span class="tab-icon">📈</span>股票</button>
+  <button class="tab active" data-page="stocks"><span class="tab-icon">📈</span>股票</button>
+  <button class="tab" data-page="shows"><span class="tab-icon">📺</span>追劇</button>
   <button class="tab" data-page="settings"><span class="tab-icon">⚙️</span>設定</button>
 </nav>
 
