@@ -7,6 +7,13 @@ const Shows = {
   list() { return Store.load('shows', []); },
   saveList(list) { Store.save('shows', list); },
 
+  /* 最近一次觀看紀錄的日期(YYYY-MM-DD),沒記錄過就回傳 null */
+  lastWatchDate(s) {
+    const log = s.log || [];
+    if (!log.length) return null;
+    return log.reduce((max, e) => (e.date > max ? e.date : max), log[0].date);
+  },
+
   /* 寫回 Google Sheet(未啟用同步時靜默略過) */
   sync(action, data) {
     if (!Sheets.enabled()) return;
@@ -21,7 +28,12 @@ const Shows = {
     const all = this.list();
     let list = all;
     if (this.filter !== 'all') list = all.filter(s => s.status === this.filter);
-    list.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+    list.sort((a, b) => {
+      const da = this.lastWatchDate(a) || '';
+      const db = this.lastWatchDate(b) || '';
+      if (da !== db) return db.localeCompare(da); // 依觀看日期新到舊排序
+      return (b.addedAt || 0) - (a.addedAt || 0); // 都沒觀看紀錄時,退回新增時間排序
+    });
 
     empty.classList.toggle('hidden', list.length > 0);
     empty.querySelector('p').innerHTML = all.length
@@ -33,11 +45,13 @@ const Shows = {
         : `<div class="show-poster placeholder">🎬</div>`;
       const stars = s.rating ? `<span class="stars-small">${'★'.repeat(s.rating)}</span>` : '';
       const chipCls = s.status === 'done' ? 'done' : s.status === 'want' ? 'want' : '';
+      const watchDate = this.lastWatchDate(s);
       return `<button class="show-card" data-id="${esc(s.id)}">
         ${poster}
         <div class="show-card-body">
           <div class="show-card-title">${esc(s.title)}</div>
           <div class="show-card-sub"><span class="chip ${chipCls}">${this.STATUS[s.status] || ''}</span>${stars}</div>
+          ${watchDate ? `<div class="show-card-sub">📅 ${esc(watchDate)}</div>` : ''}
           ${s.platform ? `<div class="show-card-sub">${esc(s.platform)}</div>` : ''}
         </div>
       </button>`;
