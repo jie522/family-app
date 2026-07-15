@@ -79,27 +79,42 @@ const Stocks = {
     return { cls, text: `${sign}${Math.abs(q.chg).toFixed(2)} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)` };
   },
 
-  /* 近三個月走勢迷你圖:closes 是每日收盤序列,顏色依這段期間漲跌(非當日漲跌)決定 */
+  /* 近三個月走勢迷你圖:closes 是每日收盤序列,顏色依這段期間漲跌(非當日漲跌)決定
+   * 資料點數夠多(≥MA_PERIOD+1)時疊一條 5 日均線,幫忙看短期趨勢方向 */
   sparklineSvg(closes) {
     if (!closes || closes.length < 2) return '';
     const w = 300, h = 60, pad = 4;
     const min = Math.min(...closes), max = Math.max(...closes);
     const span = (max - min) || 1;
     const stepX = (w - pad * 2) / (closes.length - 1);
-    const pts = closes.map((c, i) => {
+    const toXY = (v, i) => {
       const x = pad + i * stepX;
-      const y = pad + (1 - (c - min) / span) * (h - pad * 2);
+      const y = pad + (1 - (v - min) / span) * (h - pad * 2);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
-    });
+    };
+    const pts = closes.map((c, i) => toXY(c, i));
     const line = pts.join(' ');
     const area = `${pad},${h - pad} ${line} ${(w - pad).toFixed(1)},${h - pad}`;
     const cls = closes[closes.length - 1] >= closes[0] ? 'chg-up' : 'chg-down';
+
+    const MA_PERIOD = 5;
+    let maLine = '';
+    if (closes.length > MA_PERIOD) {
+      const maPts = [];
+      for (let i = MA_PERIOD - 1; i < closes.length; i++) {
+        const avg = closes.slice(i - MA_PERIOD + 1, i + 1).reduce((a, b) => a + b, 0) / MA_PERIOD;
+        maPts.push(toXY(avg, i));
+      }
+      maLine = `<polyline points="${maPts.join(' ')}" class="spark-ma"></polyline>`;
+    }
+
     return `<div class="spark-wrap">
       <svg viewBox="0 0 ${w} ${h}" class="spark-svg ${cls}">
         <polygon points="${area}" class="spark-area"></polygon>
         <polyline points="${line}" class="spark-line"></polyline>
+        ${maLine}
       </svg>
-      <div class="spark-label">近 3 個月走勢(${min.toFixed(1)} ~ ${max.toFixed(1)})</div>
+      <div class="spark-label">近 3 個月走勢(${min.toFixed(1)} ~ ${max.toFixed(1)})${maLine ? ' · <span class="spark-ma-label">— 5日均線</span>' : ''}</div>
     </div>`;
   },
 

@@ -314,6 +314,11 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 .spark-svg.chg-up .spark-area { fill: var(--up); opacity: .1; }
 .spark-svg.chg-down .spark-area { fill: var(--down); opacity: .1; }
 .spark-label { font-size: 11px; color: var(--text2); margin-top: 4px; text-align: right; }
+.spark-ma {
+  fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round;
+  stroke-dasharray: 4 3; opacity: .85;
+}
+.spark-ma-label { color: var(--accent); }
 
 .modal .btn.block { width: 100%; margin-top: 16px; }
 
