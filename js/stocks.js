@@ -53,6 +53,9 @@ const Stocks = {
     if (lv.h != null) m.h = lv.h;
     if (lv.l != null) m.l = lv.l;
     if (lv.v != null) m.v = lv.v;
+    if (lv.w52h != null) m.w52h = lv.w52h;
+    if (lv.w52l != null) m.w52l = lv.w52l;
+    if (lv.spark) m.spark = lv.spark;
     return m;
   },
 
@@ -63,6 +66,30 @@ const Stocks = {
     const sign = q.chg > 0 ? '▲' : q.chg < 0 ? '▼' : '';
     const cls = q.chg > 0 ? 'chg-up' : q.chg < 0 ? 'chg-down' : 'chg-flat';
     return { cls, text: `${sign}${Math.abs(q.chg).toFixed(2)} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)` };
+  },
+
+  /* 近三個月走勢迷你圖:closes 是每日收盤序列,顏色依這段期間漲跌(非當日漲跌)決定 */
+  sparklineSvg(closes) {
+    if (!closes || closes.length < 2) return '';
+    const w = 300, h = 60, pad = 4;
+    const min = Math.min(...closes), max = Math.max(...closes);
+    const span = (max - min) || 1;
+    const stepX = (w - pad * 2) / (closes.length - 1);
+    const pts = closes.map((c, i) => {
+      const x = pad + i * stepX;
+      const y = pad + (1 - (c - min) / span) * (h - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const line = pts.join(' ');
+    const area = `${pad},${h - pad} ${line} ${(w - pad).toFixed(1)},${h - pad}`;
+    const cls = closes[closes.length - 1] >= closes[0] ? 'chg-up' : 'chg-down';
+    return `<div class="spark-wrap">
+      <svg viewBox="0 0 ${w} ${h}" class="spark-svg ${cls}">
+        <polygon points="${area}" class="spark-area"></polygon>
+        <polyline points="${line}" class="spark-line"></polyline>
+      </svg>
+      <div class="spark-label">近 3 個月走勢(${min.toFixed(1)} ~ ${max.toFixed(1)})</div>
+    </div>`;
   },
 
   render() {
@@ -262,10 +289,13 @@ const Stocks = {
           <span class="big-change-badge ${ch.cls}">${ch.text}</span>
         </div>
       </div>
+      ${q?.spark ? this.sparklineSvg(q.spark) : ''}
       ${q ? `<div class="fact-grid">
         <div class="fact"><div class="k">開盤</div><div class="v">${q.o != null ? q.o.toFixed(2) : '—'}</div></div>
         <div class="fact"><div class="k">最高</div><div class="v up">${q.h != null ? q.h.toFixed(2) : '—'}</div></div>
         <div class="fact"><div class="k">最低</div><div class="v down">${q.l != null ? q.l.toFixed(2) : '—'}</div></div>
+        <div class="fact"><div class="k">52週高</div><div class="v up">${q.w52h != null ? q.w52h.toFixed(2) : '—'}</div></div>
+        <div class="fact"><div class="k">52週低</div><div class="v down">${q.w52l != null ? q.w52l.toFixed(2) : '—'}</div></div>
         <div class="fact"><div class="k">成交量(張)</div><div class="v">${q.v != null ? fmt(Math.round(q.v / 1000)) : '—'}</div></div>
         <div class="fact"><div class="k">本益比</div><div class="v">${q.pe != null ? q.pe : '—'}</div></div>
         <div class="fact"><div class="k">殖利率</div><div class="v">${q.dy != null ? q.dy + '%' : '—'}</div></div>

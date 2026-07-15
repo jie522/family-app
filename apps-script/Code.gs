@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 10; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 11; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '更新時間'];
@@ -326,10 +326,12 @@ function fetchTwseMis(codes, market, out, dbg) {
 }
 
 function fetchYahooBatch(codes, suffix, out, dbg) {
+  // range=3mo 除了近三個月每日收盤序列(拿來畫走勢圖),
+  // meta 裡的即時價、52 週高低都還是最新的,不用多打一次 API。
   var reqs = codes.map(function (c) {
     return {
       url: 'https://query1.finance.yahoo.com/v8/finance/chart/' +
-        encodeURIComponent(c) + suffix + '?interval=1d&range=1d',
+        encodeURIComponent(c) + suffix + '?interval=1d&range=3mo',
       muteHttpExceptions: true,
     };
   });
@@ -352,16 +354,29 @@ function parseYahooChart(resp) {
     var m = r.meta || {};
     if (m.regularMarketPrice == null) return null;
     var arr = (r.indicators && r.indicators.quote && r.indicators.quote[0]) || {};
+    var todayOpen = lastNonNull(arr.open); // range=3mo 時 arr.open 是整段序列,今日開盤是最後一個非空值
+    var closes = (arr.close || []).filter(function (v) { return v != null; });
     return {
       c: m.regularMarketPrice,                                        // 最新成交價
       y: m.chartPreviousClose != null ? m.chartPreviousClose : m.previousClose, // 昨收
-      o: (arr.open && arr.open[0] != null) ? arr.open[0] : null,      // 今日開盤
+      o: todayOpen,                                                    // 今日開盤
       h: m.regularMarketDayHigh != null ? m.regularMarketDayHigh : null,
       l: m.regularMarketDayLow != null ? m.regularMarketDayLow : null,
       v: m.regularMarketVolume != null ? m.regularMarketVolume : null, // 累積成交股數
       t: m.regularMarketTime != null ? m.regularMarketTime : null,     // 報價時間(unix 秒)
+      w52h: m.fiftyTwoWeekHigh != null ? m.fiftyTwoWeekHigh : null,    // 52 週最高
+      w52l: m.fiftyTwoWeekLow != null ? m.fiftyTwoWeekLow : null,      // 52 週最低
+      spark: closes.length >= 2 ? closes : null,                      // 近三個月每日收盤,拿來畫走勢圖
     };
   } catch (e) { return null; }
+}
+
+function lastNonNull(arr) {
+  if (!arr) return null;
+  for (var i = arr.length - 1; i >= 0; i--) {
+    if (arr[i] != null) return arr[i];
+  }
+  return null;
 }
 
 /* ---------- 整批上傳(啟用同步時搬資料) ---------- */

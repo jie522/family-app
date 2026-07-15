@@ -289,6 +289,17 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 .big-change-badge.chg-down { background: rgba(15,157,88,.14); }
 .big-change-badge.chg-flat { background: var(--card); }
 
+/* 近三個月走勢迷你圖 */
+.spark-wrap { margin: 10px 0 4px; }
+.spark-svg { width: 100%; height: 64px; display: block; }
+.spark-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.spark-svg.chg-up .spark-line { stroke: var(--up); }
+.spark-svg.chg-down .spark-line { stroke: var(--down); }
+.spark-area { stroke: none; }
+.spark-svg.chg-up .spark-area { fill: var(--up); opacity: .1; }
+.spark-svg.chg-down .spark-area { fill: var(--down); opacity: .1; }
+.spark-label { font-size: 11px; color: var(--text2); margin-top: 4px; text-align: right; }
+
 .modal .btn.block { width: 100%; margin-top: 16px; }
 
 /* ============ Markdown 報告 ============ */
