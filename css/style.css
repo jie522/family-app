@@ -97,12 +97,10 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 .report-dates:empty { margin: 0; }
 .report-dates select { max-width: 220px; font-size: 15px; padding: 8px 12px; }
 
-/* 產業知識收合區塊 */
-.industry-details summary {
-  cursor: pointer; font-size: 14px; font-weight: 600;
-  color: var(--accent); padding: 6px 0; user-select: none;
-}
-.industry-details[open] summary { margin-bottom: 4px; }
+/* 股票詳情頁籤(公司簡介/產業知識/分析報告) */
+.sk-tabs { margin-top: 16px; }
+.sk-pane { display: none; }
+.sk-pane.active { display: block; }
 
 /* ============ 追劇卡片 ============ */
 .show-grid {

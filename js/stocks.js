@@ -151,7 +151,7 @@ const Stocks = {
     } catch {
       const el = document.getElementById('sk-about');
       if (!el) return;
-      el.closest('.report-block')?.classList.add('hidden');
+      el.innerHTML = '<p class="hint">還沒有這檔的公司簡介。新增 reports/代號/_about.md 就會顯示在這裡。</p>';
     }
   },
 
@@ -172,7 +172,7 @@ const Stocks = {
     }
   },
 
-  /* 讀取 reports/<代號>/_industry.md 產業知識(選用檔案,沒有就整塊隱藏) */
+  /* 讀取 reports/<代號>/_industry.md 產業知識(沒有檔案就顯示提示) */
   async loadIndustry(code) {
     const box = document.getElementById('sk-industry');
     if (!box) return;
@@ -182,8 +182,11 @@ const Stocks = {
       if (!res.ok || text.trimStart().startsWith('<')) throw new Error();
       if (!document.getElementById('sk-industry')) return; // 彈窗已被關掉
       box.innerHTML = mdToHtml(text);
-      document.getElementById('sk-industry-block')?.classList.remove('hidden');
-    } catch { /* 沒有這個檔案就維持隱藏 */ }
+    } catch {
+      const el = document.getElementById('sk-industry');
+      if (!el) return;
+      el.innerHTML = '<p class="hint">還沒有這檔的產業知識。新增 reports/代號/_industry.md 就會顯示在這裡。</p>';
+    }
   },
 
   /* 公司簡介 + 產業知識 + 依日期切換的分析報告,一起初始化 */
@@ -234,28 +237,36 @@ const Stocks = {
         <div class="fact"><div class="k">殖利率</div><div class="v">${q.dy != null ? q.dy + '%' : '—'}</div></div>
       </div>` : '<p class="hint">目前沒有這檔的報價資料(部署後每交易日自動更新)</p>'}
 
-      <div class="report-block">
-        <label>公司簡介</label>
+      <div class="segmented sk-tabs" id="sk-tabs">
+        <button data-pane="about" class="active">公司簡介</button>
+        <button data-pane="industry">產業知識</button>
+        <button data-pane="report">分析報告</button>
+      </div>
+      <div class="sk-pane active" id="sk-pane-about">
         <div id="sk-about" class="md-body"><p class="hint">讀取中…</p></div>
       </div>
-
-      <div class="report-block hidden" id="sk-industry-block">
-        <label>產業知識</label>
-        <details class="industry-details">
-          <summary>📚 點擊展開產業深入介紹</summary>
-          <div id="sk-industry" class="md-body"></div>
-        </details>
+      <div class="sk-pane" id="sk-pane-industry">
+        <div id="sk-industry" class="md-body"><p class="hint">讀取中…</p></div>
       </div>
-
-      <label>分析報告</label>
-      <div class="report-dates" id="sk-report-dates"></div>
-      <div id="sk-report" class="md-body"><p class="hint">讀取中…</p></div>
+      <div class="sk-pane" id="sk-pane-report">
+        <div class="report-dates" id="sk-report-dates"></div>
+        <div id="sk-report" class="md-body"><p class="hint">讀取中…</p></div>
+      </div>
 
       <label>我的分析筆記</label>
       <textarea id="sk-notes" placeholder="買賣想法、目標價、觀察重點…">${esc(w.notes)}</textarea>
 
       <button class="btn danger block" id="sk-delete">取消追蹤</button>
     `);
+
+    // 公司簡介/產業知識/分析報告 三個頁籤切換
+    const tabs = document.getElementById('sk-tabs');
+    tabs.querySelectorAll('button').forEach(btn =>
+      btn.addEventListener('click', () => {
+        tabs.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+        ['about', 'industry', 'report'].forEach(p =>
+          document.getElementById('sk-pane-' + p).classList.toggle('active', p === btn.dataset.pane));
+      }));
 
     this.loadReportsSection(code);
 
