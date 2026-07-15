@@ -172,11 +172,26 @@ const Stocks = {
     }
   },
 
-  /* 公司簡介 + 依日期切換的分析報告,一起初始化 */
+  /* 讀取 reports/<代號>/_industry.md 產業知識(選用檔案,沒有就整塊隱藏) */
+  async loadIndustry(code) {
+    const box = document.getElementById('sk-industry');
+    if (!box) return;
+    try {
+      const res = await fetch(`reports/${encodeURIComponent(code)}/_industry.md`, { cache: 'no-cache' });
+      const text = res.ok ? await res.text() : '';
+      if (!res.ok || text.trimStart().startsWith('<')) throw new Error();
+      if (!document.getElementById('sk-industry')) return; // 彈窗已被關掉
+      box.innerHTML = mdToHtml(text);
+      document.getElementById('sk-industry-block')?.classList.remove('hidden');
+    } catch { /* 沒有這個檔案就維持隱藏 */ }
+  },
+
+  /* 公司簡介 + 產業知識 + 依日期切換的分析報告,一起初始化 */
   async loadReportsSection(code) {
-    this.loadAbout(code); // 跟報告平行載入,互不擋
+    this.loadAbout(code);    // 跟報告平行載入,互不擋
+    this.loadIndustry(code);
     const manifest = await this.loadManifest();
-    const dates = [...(manifest[code] || [])].sort().reverse();
+    const dates = [...(manifest[code] || [])].sort().reverse(); // 最新的排最前面
     const dateBox = document.getElementById('sk-report-dates');
     const reportBox = document.getElementById('sk-report');
     if (!dateBox || !reportBox) return; // 彈窗已被關掉
@@ -187,13 +202,10 @@ const Stocks = {
       return;
     }
     dateBox.innerHTML = dates.length > 1
-      ? dates.map((d, i) => `<button data-date="${esc(d)}" class="${i === 0 ? 'active' : ''}">${esc(d)}</button>`).join('')
+      ? `<select id="sk-report-date-sel">${dates.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('')}</select>`
       : '';
-    dateBox.querySelectorAll('button').forEach(btn =>
-      btn.addEventListener('click', () => {
-        dateBox.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
-        this.loadReport(code, btn.dataset.date);
-      }));
+    document.getElementById('sk-report-date-sel')
+      ?.addEventListener('change', e => this.loadReport(code, e.target.value));
     this.loadReport(code, dates[0]);
   },
 
@@ -227,8 +239,16 @@ const Stocks = {
         <div id="sk-about" class="md-body"><p class="hint">讀取中…</p></div>
       </div>
 
+      <div class="report-block hidden" id="sk-industry-block">
+        <label>產業知識</label>
+        <details class="industry-details">
+          <summary>📚 點擊展開產業深入介紹</summary>
+          <div id="sk-industry" class="md-body"></div>
+        </details>
+      </div>
+
       <label>分析報告</label>
-      <div class="segmented" id="sk-report-dates"></div>
+      <div class="report-dates" id="sk-report-dates"></div>
       <div id="sk-report" class="md-body"><p class="hint">讀取中…</p></div>
 
       <label>我的分析筆記</label>

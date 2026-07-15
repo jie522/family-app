@@ -92,6 +92,18 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 }
 .segmented button.active { background: var(--accent); color: #fff; font-weight: 700; }
 
+/* 分析報告日期下拉選單 */
+.report-dates { margin: 4px 0 10px; }
+.report-dates:empty { margin: 0; }
+.report-dates select { max-width: 220px; font-size: 15px; padding: 8px 12px; }
+
+/* 產業知識收合區塊 */
+.industry-details summary {
+  cursor: pointer; font-size: 14px; font-weight: 600;
+  color: var(--accent); padding: 6px 0; user-select: none;
+}
+.industry-details[open] summary { margin-bottom: 4px; }
+
 /* ============ 追劇卡片 ============ */
 .show-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
