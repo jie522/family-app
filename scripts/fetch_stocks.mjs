@@ -26,10 +26,29 @@ const INDUSTRY_MAP = {
   '35': '綠能環保', '36': '數位雲端', '37': '運動休閒', '38': '居家生活',
 };
 
-async function getJson(url) {
-  const res = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`);
-  return res.json();
+// 政府開放資料站偶爾會回傳暫時性錯誤(如 Cloudflare 520),重試幾次再放棄
+async function getJson(url, retries = 3) {
+  for (let i = 1; i <= retries; i++) {
+    try {
+      const res = await fetch(url, { headers: { accept: 'application/json' } });
+      if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      if (i === retries) throw err;
+      console.log(`⚠️ ${url} 第 ${i} 次失敗(${err.message}),1 秒後重試…`);
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+}
+
+// 上櫃資料來源比較不穩,失敗時不讓整份更新掛掉,退回只有上市資料
+async function getJsonSoft(url) {
+  try {
+    return await getJson(url);
+  } catch (err) {
+    console.log(`⚠️ 上櫃資料來源失敗,這次先跳過(${err.message})`);
+    return [];
+  }
 }
 
 const num = (v) => {
@@ -50,9 +69,10 @@ const capInBillion = (v) => {
   return n != null ? Math.round(n / 1e8 * 10) / 10 : null;
 };
 
-const [dayRows, valRows, infoRows, otcDayRows, otcValRows, otcInfoRows] = await Promise.all([
-  getJson(DAY_URL), getJson(VAL_URL), getJson(INFO_URL),
-  getJson(OTC_DAY_URL), getJson(OTC_VAL_URL), getJson(OTC_INFO_URL),
+// 上市資料是核心資料,抓不到就直接失敗;上櫃是加值資料,抓不到就跳過那三個來源,不影響上市資料照常更新
+const [dayRows, valRows, infoRows] = await Promise.all([getJson(DAY_URL), getJson(VAL_URL), getJson(INFO_URL)]);
+const [otcDayRows, otcValRows, otcInfoRows] = await Promise.all([
+  getJsonSoft(OTC_DAY_URL), getJsonSoft(OTC_VAL_URL), getJsonSoft(OTC_INFO_URL),
 ]);
 
 const val = new Map(valRows.map(r => [r.Code, r]));
