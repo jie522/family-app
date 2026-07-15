@@ -88,14 +88,14 @@ const Stocks = {
     listEl.innerHTML = watch.map(w => {
       const q = this.quote(w.code);
       const ch = this.fmtChange(q);
-      return `<button class="stock-row" data-code="${esc(w.code)}">
+      return `<button class="stock-row ${ch.cls}" data-code="${esc(w.code)}">
         <span class="stock-id">
           <span class="stock-name">${esc(q?.n || w.name || w.code)}</span>
           <span class="stock-code">${esc(w.code)}${w.notes ? ' · 📝 有筆記' : ''}</span>
         </span>
         <span class="stock-quote">
-          <div class="stock-price">${q?.c != null ? q.c.toFixed(2) : '—'}</div>
-          <div class="stock-change ${ch.cls}">${ch.text}</div>
+          <div class="stock-price ${ch.cls}">${q?.c != null ? q.c.toFixed(2) : '—'}</div>
+          <div class="stock-change-badge ${ch.cls}">${ch.text}</div>
         </span>
       </button>`;
     }).join('');
@@ -256,14 +256,16 @@ const Stocks = {
     Modal.open(`
       <button class="modal-close" data-close>✕</button>
       <h2>${esc(q?.n || w.name || code)} <span style="font-size:14px;color:var(--text2)">${esc(code)}</span></h2>
-      <div class="big-quote">
-        <span class="big-price ${ch.cls}">${q?.c != null ? q.c.toFixed(2) : '—'}</span>
-        <span class="big-change ${ch.cls}">${ch.text}</span>
+      <div class="big-quote-block ${ch.cls}">
+        <div class="big-quote">
+          <span class="big-price ${ch.cls}">${q?.c != null ? q.c.toFixed(2) : '—'}</span>
+          <span class="big-change-badge ${ch.cls}">${ch.text}</span>
+        </div>
       </div>
       ${q ? `<div class="fact-grid">
         <div class="fact"><div class="k">開盤</div><div class="v">${q.o != null ? q.o.toFixed(2) : '—'}</div></div>
-        <div class="fact"><div class="k">最高</div><div class="v">${q.h != null ? q.h.toFixed(2) : '—'}</div></div>
-        <div class="fact"><div class="k">最低</div><div class="v">${q.l != null ? q.l.toFixed(2) : '—'}</div></div>
+        <div class="fact"><div class="k">最高</div><div class="v up">${q.h != null ? q.h.toFixed(2) : '—'}</div></div>
+        <div class="fact"><div class="k">最低</div><div class="v down">${q.l != null ? q.l.toFixed(2) : '—'}</div></div>
         <div class="fact"><div class="k">成交量(張)</div><div class="v">${q.v != null ? fmt(Math.round(q.v / 1000)) : '—'}</div></div>
         <div class="fact"><div class="k">本益比</div><div class="v">${q.pe != null ? q.pe : '—'}</div></div>
         <div class="fact"><div class="k">殖利率</div><div class="v">${q.dy != null ? q.dy + '%' : '—'}</div></div>

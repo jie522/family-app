@@ -1,4 +1,4 @@
-# 🏠 家庭小站
+# 🏠 FAMIAP
 
 家庭共用的小工具網站,手機瀏覽器開網址就能用:
 
@@ -14,7 +14,7 @@
    ```
    git init
    git add .
-   git commit -m "家庭小站 v1"
+   git commit -m "FAMIAP v1"
    git branch -M main
    git remote add origin https://github.com/<你的帳號>/family-app.git
    git push -u origin main
@@ -33,7 +33,7 @@
 
 ## 資料存哪裡?
 
-啟用「Google Sheet 同步」後,**追劇清單和股票追蹤清單都存在雲端**的同一份 [家庭小站 Google Sheet](https://docs.google.com/spreadsheets/d/1rS_foFkuoFXVdK_9QxEFUFO7cPwwbX4Y8d7HY7yvIhI/edit),不再只存在單一手機裡:
+啟用「Google Sheet 同步」後,**追劇清單和股票追蹤清單都存在雲端**的同一份 [FAMIAP Google Sheet](https://docs.google.com/spreadsheets/d/1rS_foFkuoFXVdK_9QxEFUFO7cPwwbX4Y8d7HY7yvIhI/edit),不再只存在單一手機裡:
 
 - **追劇清單**:App 的新增、觀看紀錄、評分都會自動寫進 Sheet;直接在 Sheet 第一個分頁加一列(日期/劇名/平台/備註)App 也讀得到。
 - **股票追蹤清單**:存在「股票追蹤」分頁(代號/名稱/筆記),App 裡加入、取消追蹤、寫筆記都會同步。

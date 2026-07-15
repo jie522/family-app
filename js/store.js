@@ -15,7 +15,7 @@ const Store = {
 
   exportAll() {
     const data = {
-      app: '家庭小站',
+      app: 'FAMIAP',
       version: 1,
       exportedAt: new Date().toISOString(),
       shows: this.load('shows', []),
@@ -25,7 +25,7 @@ const Store = {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `家庭小站備份_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `FAMIAP備份_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   },
@@ -35,7 +35,8 @@ const Store = {
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result);
-        if (!data || data.app !== '家庭小站') throw new Error('格式不對');
+        // 舊版備份檔的 app 標記是「家庭小站」,改名後仍要能匯入
+        if (!data || (data.app !== 'FAMIAP' && data.app !== '家庭小站')) throw new Error('格式不對');
         if (Array.isArray(data.shows)) this.save('shows', data.shows);
         if (Array.isArray(data.stocks)) this.save('stocks', data.stocks);
         if (data.settings) this.save('settings', data.settings);
