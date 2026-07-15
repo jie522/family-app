@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 7; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 8; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '更新時間'];
@@ -272,17 +272,48 @@ function tmdbSearch(d) {
   return { ok: true, results: results };
 }
 
-/* ---------- 即時報價代理(Yahoo 股市) ----------
- * 瀏覽器因跨域限制不能直接抓 Yahoo,由這裡代抓再回傳給 App。
- * 上市股票用 .TW,查不到的再試上櫃 .TWO;盤中資料可能延遲數分鐘。 */
+/* ---------- 即時報價代理 ----------
+ * 瀏覽器因跨域限制不能直接抓,由這裡代抓再回傳給 App。
+ * 主要來源:證交所官方即時 API(mis.twse.com.tw,約延遲 5 秒);
+ * 上市用 tse_、查不到再試上櫃 otc_;都失敗才退到 Yahoo(GAS 常被 Yahoo 擋,僅備援)。 */
 function quotes(d) {
   var codes = (d.codes || []).slice(0, 30).map(String);
   if (!codes.length) return { ok: true, quotes: {} };
   var out = {};
-  fetchYahooBatch(codes, '.TW', out);
+  fetchTwseMis(codes, 'tse', out);
   var misses = codes.filter(function (c) { return !out[c]; });
+  if (misses.length) fetchTwseMis(misses, 'otc', out);
+  misses = codes.filter(function (c) { return !out[c]; });
+  if (misses.length) fetchYahooBatch(misses, '.TW', out);
+  misses = codes.filter(function (c) { return !out[c]; });
   if (misses.length) fetchYahooBatch(misses, '.TWO', out);
   return { ok: true, quotes: out };
+}
+
+function fetchTwseMis(codes, market, out) {
+  var exCh = codes.map(function (c) { return market + '_' + c + '.tw'; }).join('|');
+  var url = 'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=' + exCh +
+    '&json=1&delay=0&_=' + Date.now();
+  try {
+    var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) return;
+    var arr = JSON.parse(res.getContentText()).msgArray || [];
+    arr.forEach(function (s) {
+      var last = parseFloat(s.z); // 最新成交價;沒成交時是 '-'
+      if (isNaN(last)) last = parseFloat(String(s.b || '').split('_')[0]); // 用最佳買價替代
+      if (isNaN(last)) last = parseFloat(s.y);
+      if (isNaN(last)) return;
+      out[s.c] = {
+        c: last,
+        y: parseFloat(s.y) || null,
+        o: parseFloat(s.o) || null,
+        h: parseFloat(s.h) || null,
+        l: parseFloat(s.l) || null,
+        v: s.v ? parseInt(s.v, 10) * 1000 : null, // 證交所回傳單位是「張」,轉成股數
+        t: s.t || null,
+      };
+    });
+  } catch (e) { /* 連不上就交給後面的備援 */ }
 }
 
 function fetchYahooBatch(codes, suffix, out) {
