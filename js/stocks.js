@@ -2,6 +2,8 @@
 const Stocks = {
   data: null,        // { updated, stocks: { code: {n,c,chg,o,h,l,v,pe,pb,dy} } }
   loadError: false,
+  live: null,        // 即時報價(經 Apps Script 代抓 Yahoo): { code: {c,y,o,h,l,v,t} }
+  liveAt: null,      // 最後成功抓到即時報價的時間(Date)
 
   list() { return Store.load('stocks', []); },
   saveList(list) { Store.save('stocks', list); },
@@ -23,10 +25,35 @@ const Stocks = {
       this.loadError = true;
     }
     this.render();
+    this.refreshLive(); // 背景抓即時報價,抓到後自動重繪
+  },
+
+  /* 經 Apps Script 代抓 Yahoo 即時報價(未啟用同步或抓不到就維持每日收盤資料) */
+  async refreshLive() {
+    if (!Sheets.enabled()) return;
+    const codes = this.list().map(w => w.code);
+    if (!codes.length) return;
+    try {
+      const json = await Sheets.call('quotes', { codes });
+      if (!json.ok || !json.quotes || !Object.keys(json.quotes).length) return;
+      this.live = json.quotes;
+      this.liveAt = new Date();
+      this.render();
+    } catch { /* 連不上就算了,顯示收盤資料 */ }
   },
 
   quote(code) {
-    return this.data?.stocks?.[code] || null;
+    const base = this.data?.stocks?.[code] || null;
+    const lv = this.live?.[code];
+    if (!lv || lv.c == null) return base;
+    const m = Object.assign({ n: null, pe: null, dy: null, pb: null }, base);
+    m.c = lv.c;
+    if (lv.y != null) m.chg = +(lv.c - lv.y).toFixed(2);
+    if (lv.o != null) m.o = lv.o;
+    if (lv.h != null) m.h = lv.h;
+    if (lv.l != null) m.l = lv.l;
+    if (lv.v != null) m.v = lv.v;
+    return m;
   },
 
   fmtChange(q) {
@@ -44,13 +71,18 @@ const Stocks = {
     const empty = document.getElementById('stock-empty');
     const watch = this.list();
 
-    if (this.loadError) {
+    if (this.loadError && !this.live) {
       meta.textContent = '⚠️ 讀不到股票資料檔(data/stocks.json)。部署到 GitHub 後會自動更新。';
+    } else if (this.liveAt) {
+      const hm = `${String(this.liveAt.getHours()).padStart(2, '0')}:${String(this.liveAt.getMinutes()).padStart(2, '0')}`;
+      meta.innerHTML = `盤中報價 ${hm}(Yahoo,可能延遲數分鐘) <button id="stock-live-refresh" class="meta-refresh">🔄 更新</button>`;
     } else if (this.data) {
-      meta.textContent = `資料日期:${this.data.updated}(收盤)`;
+      meta.innerHTML = `資料日期:${esc(this.data.updated)}(收盤)` +
+        (Sheets.enabled() ? ' <button id="stock-live-refresh" class="meta-refresh">🔄 更新</button>' : '');
     } else {
       meta.textContent = '載入中…';
     }
+    document.getElementById('stock-live-refresh')?.addEventListener('click', () => this.refreshLive());
 
     empty.classList.toggle('hidden', watch.length > 0);
     listEl.innerHTML = watch.map(w => {

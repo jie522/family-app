@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 6; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 7; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '更新時間'];
@@ -94,6 +94,7 @@ function handle(action, d) {
     case 'upsertStock': upsertStock(d); return { ok: true };
     case 'deleteStock': deleteStock(d); return { ok: true };
     case 'tmdbSearch': return tmdbSearch(d);
+    case 'quotes':     return quotes(d);
     case 'upsertReport': upsertReport(d); return { ok: true };
     case 'deleteReport': deleteReport(d); return { ok: true };
     case 'bulk':       bulk(d);        return { ok: true };
@@ -269,6 +270,54 @@ function tmdbSearch(d) {
       };
     });
   return { ok: true, results: results };
+}
+
+/* ---------- 即時報價代理(Yahoo 股市) ----------
+ * 瀏覽器因跨域限制不能直接抓 Yahoo,由這裡代抓再回傳給 App。
+ * 上市股票用 .TW,查不到的再試上櫃 .TWO;盤中資料可能延遲數分鐘。 */
+function quotes(d) {
+  var codes = (d.codes || []).slice(0, 30).map(String);
+  if (!codes.length) return { ok: true, quotes: {} };
+  var out = {};
+  fetchYahooBatch(codes, '.TW', out);
+  var misses = codes.filter(function (c) { return !out[c]; });
+  if (misses.length) fetchYahooBatch(misses, '.TWO', out);
+  return { ok: true, quotes: out };
+}
+
+function fetchYahooBatch(codes, suffix, out) {
+  var reqs = codes.map(function (c) {
+    return {
+      url: 'https://query1.finance.yahoo.com/v8/finance/chart/' +
+        encodeURIComponent(c) + suffix + '?interval=1d&range=1d',
+      muteHttpExceptions: true,
+    };
+  });
+  var resps;
+  try { resps = UrlFetchApp.fetchAll(reqs); } catch (e) { return; }
+  for (var i = 0; i < resps.length; i++) {
+    var q = parseYahooChart(resps[i]);
+    if (q) out[codes[i]] = q;
+  }
+}
+
+function parseYahooChart(resp) {
+  try {
+    if (resp.getResponseCode() !== 200) return null;
+    var r = JSON.parse(resp.getContentText()).chart.result[0];
+    var m = r.meta || {};
+    if (m.regularMarketPrice == null) return null;
+    var arr = (r.indicators && r.indicators.quote && r.indicators.quote[0]) || {};
+    return {
+      c: m.regularMarketPrice,                                        // 最新成交價
+      y: m.chartPreviousClose != null ? m.chartPreviousClose : m.previousClose, // 昨收
+      o: (arr.open && arr.open[0] != null) ? arr.open[0] : null,      // 今日開盤
+      h: m.regularMarketDayHigh != null ? m.regularMarketDayHigh : null,
+      l: m.regularMarketDayLow != null ? m.regularMarketDayLow : null,
+      v: m.regularMarketVolume != null ? m.regularMarketVolume : null, // 累積成交股數
+      t: m.regularMarketTime != null ? m.regularMarketTime : null,     // 報價時間(unix 秒)
+    };
+  } catch (e) { return null; }
 }
 
 /* ---------- 整批上傳(啟用同步時搬資料) ---------- */

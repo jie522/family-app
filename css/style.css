@@ -97,6 +97,12 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 .report-dates:empty { margin: 0; }
 .report-dates select { max-width: 220px; font-size: 15px; padding: 8px 12px; }
 
+/* 即時報價更新按鈕(股票頁 meta 列) */
+.meta-refresh {
+  border: 1px solid var(--border); background: var(--card); color: var(--text2);
+  font-size: 12px; padding: 3px 10px; border-radius: 999px; margin-left: 6px;
+}
+
 /* 股票詳情頁籤(公司簡介/產業知識/分析報告) */
 .sk-tabs { margin-top: 16px; }
 .sk-pane { display: none; }
