@@ -178,7 +178,7 @@ const Stocks = {
               <div class="search-item-sub">收盤 ${s.c != null ? s.c.toFixed(2) : '—'}</div>
             </div>
           </button>`).join('')
-      : '<p class="hint">找不到,請確認代號或名稱(僅含上市股票)</p>';
+      : '<p class="hint">找不到,請確認代號或名稱(涵蓋上市、上櫃股票)</p>';
     box.querySelectorAll('.search-item').forEach(el =>
       el.addEventListener('click', () => this.add(el.dataset.code, this.data.stocks[el.dataset.code]?.n)));
   },

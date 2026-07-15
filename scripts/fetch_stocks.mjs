@@ -1,11 +1,17 @@
-/* 抓取台灣證交所開放資料,整理成 data/stocks.json
+/* 抓取台灣證交所(上市)+ 證券櫃買中心(上櫃)開放資料,整理成 data/stocks.json
  * 由 GitHub Actions 每交易日執行,也可以在本機執行:node scripts/fetch_stocks.mjs
  */
 import { writeFile, mkdir } from 'node:fs/promises';
 
+// 上市(TWSE)
 const DAY_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL';   // 當日行情
 const VAL_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL';      // 本益比/殖利率/淨值比
 const INFO_URL = 'https://openapi.twse.com.tw/v1/opendata/t187ap03_L';           // 上市公司基本資料(產業別/股本/上市日期)
+
+// 上櫃(TPEx)
+const OTC_DAY_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes';   // 當日行情
+const OTC_VAL_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis';      // 本益比/殖利率/淨值比
+const OTC_INFO_URL = 'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O';                  // 上櫃公司基本資料
 
 // 證交所產業別代碼表(isin.twse.com.tw 查詢頁下拉選單,穩定不太變,對照一次寫死)
 const INDUSTRY_MAP = {
@@ -44,7 +50,10 @@ const capInBillion = (v) => {
   return n != null ? Math.round(n / 1e8 * 10) / 10 : null;
 };
 
-const [dayRows, valRows, infoRows] = await Promise.all([getJson(DAY_URL), getJson(VAL_URL), getJson(INFO_URL)]);
+const [dayRows, valRows, infoRows, otcDayRows, otcValRows, otcInfoRows] = await Promise.all([
+  getJson(DAY_URL), getJson(VAL_URL), getJson(INFO_URL),
+  getJson(OTC_DAY_URL), getJson(OTC_VAL_URL), getJson(OTC_INFO_URL),
+]);
 
 const val = new Map(valRows.map(r => [r.Code, r]));
 const info = new Map(infoRows.map(r => [r['公司代號'], r]));
@@ -71,6 +80,34 @@ for (const r of dayRows) {
     cap: c ? capInBillion(c['實收資本額']) : null,                // 股本(億元)
   };
   if (!updated && r.Date) updated = r.Date; // 民國年格式 e.g. 1150713
+}
+
+// 上櫃(TPEx),欄位名稱跟上市不一樣,分開合併,寫進同一份 stocks
+const otcVal = new Map(otcValRows.map(r => [r.SecuritiesCompanyCode, r]));
+const otcInfo = new Map(otcInfoRows.map(r => [r.SecuritiesCompanyCode, r]));
+
+for (const r of otcDayRows) {
+  const code = r.SecuritiesCompanyCode;
+  // 這份資料集混雜權證/債券ETF(代號也是數字,常見 5~6 碼),一般上櫃股票代號是 4 碼,篩掉其他的
+  if (!code || !/^\d{4}$/.test(code) || stocks[code]) continue; // 代號重複時以上市資料優先
+  const v = otcVal.get(code);
+  const c = otcInfo.get(code);
+  stocks[code] = {
+    n: r.CompanyName,
+    c: num(r.Close),
+    chg: num(r.Change),
+    o: num(r.Open),
+    h: num(r.High),
+    l: num(r.Low),
+    v: num(r.TradingShares),
+    pe: v ? num(v.PriceEarningRatio) : null,
+    dy: v ? num(v.YieldRatio) : null,
+    pb: v ? num(v.PriceBookRatio) : null,
+    ind: c ? (INDUSTRY_MAP[c.SecuritiesIndustryCode] || null) : null,
+    ipo: c ? fmtDate8(c.DateOfListing) : null,
+    cap: c ? capInBillion(c['Paidin.Capital.NTDollars']) : null,
+  };
+  if (!updated && r.Date) updated = r.Date; // 民國年格式,跟上市同一種格式
 }
 
 // 民國年 → 西元 yyyy/mm/dd
