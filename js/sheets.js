@@ -130,9 +130,17 @@ const Sheets = {
     // 股票追蹤:代號,名稱,筆記
     let stocks = null;
     if (stockRows) {
-      stocks = stockRows.slice(1)
-        .map(([code, name, notes], i) => ({ code: (code || '').trim(), name: name || '', notes: notes || '', addedAt: i + 1 }))
+      const incoming = stockRows.slice(1)
+        .map(([code, name, notes]) => ({ code: (code || '').trim(), name: name || '', notes: notes || '' }))
         .filter(w => w.code);
+      // 排序是本機個人偏好、不跟 Sheet 同步:已知的股票沿用本機原本的排列順序,
+      // 只有新出現的(這支手機還沒看過的)才補到最後面
+      const prevList = Store.load('stocks', []);
+      const prevCodes = new Set(prevList.map(w => w.code));
+      const incomingMap = new Map(incoming.map(w => [w.code, w]));
+      const kept = prevList.filter(w => incomingMap.has(w.code)).map(w => incomingMap.get(w.code));
+      const added = incoming.filter(w => !prevCodes.has(w.code));
+      stocks = [...kept, ...added];
       Store.save('stocks', stocks);
     }
 

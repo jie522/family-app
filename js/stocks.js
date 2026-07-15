@@ -1,4 +1,13 @@
 /* 台股追蹤模組:報價資料來自 data/stocks.json(GitHub Actions 每交易日更新) */
+/* 主要生產東西的一句話標籤,人工維護,列表上一眼看出這檔在做什麼(不是官方產業分類) */
+const PRODUCT_TAGS = {
+  '2059': '滑軌',
+  '2317': '組裝代工',
+  '2330': '晶圓代工',
+  '3548': '轉軸',
+  '8033': '無人機',
+};
+
 const Stocks = {
   data: null,        // { updated, stocks: { code: {n,c,chg,o,h,l,v,pe,pb,dy} } }
   loadError: false,
@@ -102,6 +111,8 @@ const Stocks = {
     </div>`;
   },
 
+  reordering: false, // 排序模式只存在這支手機,不跟 Google Sheet 同步
+
   render() {
     const meta = document.getElementById('stock-meta');
     const listEl = document.getElementById('stock-list');
@@ -119,26 +130,63 @@ const Stocks = {
     } else {
       meta.textContent = '載入中…';
     }
+    if (watch.length > 1) {
+      meta.insertAdjacentHTML('beforeend',
+        `<button id="stock-reorder-toggle" class="meta-refresh ${this.reordering ? 'active' : ''}">${this.reordering ? '✓ 完成排序' : '↕️ 排序'}</button>`);
+    }
     document.getElementById('stock-live-refresh')?.addEventListener('click', () => this.refreshLive());
+    document.getElementById('stock-reorder-toggle')?.addEventListener('click', () => {
+      this.reordering = !this.reordering;
+      this.render();
+    });
 
     empty.classList.toggle('hidden', watch.length > 0);
-    listEl.innerHTML = watch.map(w => {
+    listEl.classList.toggle('reordering', this.reordering);
+    listEl.innerHTML = watch.map((w, i) => {
       const q = this.quote(w.code);
       const ch = this.fmtChange(q);
-      return `<button class="stock-row ${ch.cls}" data-code="${esc(w.code)}">
-        <span class="stock-id">
-          <span class="stock-name">${esc(q?.n || w.name || w.code)}</span>
+      const tag = PRODUCT_TAGS[w.code];
+      const idBlock = `<span class="stock-id">
+          <span class="stock-name">${esc(q?.n || w.name || w.code)}${tag ? ` <span class="stock-tag">${esc(tag)}</span>` : ''}</span>
           <span class="stock-code">${esc(w.code)}${w.notes ? ' · 📝 有筆記' : ''}</span>
-        </span>
-        <span class="stock-quote">
+        </span>`;
+      const quoteBlock = `<span class="stock-quote">
           <div class="stock-price ${ch.cls}">${q?.c != null ? q.c.toFixed(2) : '—'}</div>
           <div class="stock-change-badge ${ch.cls}">${ch.text}</div>
-        </span>
-      </button>`;
+        </span>`;
+      if (this.reordering) {
+        return `<div class="stock-row ${ch.cls} reorder-mode" data-code="${esc(w.code)}">
+          <div class="reorder-left">
+            <div class="reorder-btns">
+              <button class="reorder-btn" data-dir="up" data-i="${i}" ${i === 0 ? 'disabled' : ''}>▲</button>
+              <button class="reorder-btn" data-dir="down" data-i="${i}" ${i === watch.length - 1 ? 'disabled' : ''}>▼</button>
+            </div>
+            ${idBlock}
+          </div>
+          ${quoteBlock}
+        </div>`;
+      }
+      return `<button class="stock-row ${ch.cls}" data-code="${esc(w.code)}">${idBlock}${quoteBlock}</button>`;
     }).join('');
 
-    listEl.querySelectorAll('.stock-row').forEach(el =>
-      el.addEventListener('click', () => this.openDetail(el.dataset.code)));
+    if (this.reordering) {
+      listEl.querySelectorAll('.reorder-btn').forEach(el =>
+        el.addEventListener('click', () => this.moveStock(+el.dataset.i, el.dataset.dir)));
+    } else {
+      listEl.querySelectorAll('.stock-row').forEach(el =>
+        el.addEventListener('click', () => this.openDetail(el.dataset.code)));
+    }
+  },
+
+  /* 排序只存本機(localStorage),不寫回 Google Sheet——排列順序是個人使用習慣,
+   * 沒必要每支手機都一樣;跟 Sheet 同步時看 sheets.js 的合併邏輯,會保留這支手機原本的順序。 */
+  moveStock(i, dir) {
+    const list = this.list();
+    const j = dir === 'up' ? i - 1 : i + 1;
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    this.saveList(list);
+    this.render();
   },
 
   /* ---------- 新增 ---------- */

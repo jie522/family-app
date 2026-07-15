@@ -97,11 +97,13 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 .report-dates:empty { margin: 0; }
 .report-dates select { max-width: 220px; font-size: 15px; padding: 8px 12px; }
 
-/* 即時報價更新按鈕(股票頁 meta 列) */
+/* 即時報價更新按鈕 / 排序切換(股票頁 meta 列) */
+.stock-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 0; }
 .meta-refresh {
   border: 1px solid var(--border); background: var(--card); color: var(--text2);
   font-size: 12px; padding: 3px 10px; border-radius: 999px; margin-left: 6px;
 }
+.meta-refresh.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
 
 /* 股票詳情頁籤(公司簡介/產業知識/分析報告) */
 .sk-tabs { margin-top: 16px; }
@@ -153,9 +155,21 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 }
 .stock-row.chg-up { border-left-color: var(--up); }
 .stock-row.chg-down { border-left-color: var(--down); }
+.reorder-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.reorder-btns { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.reorder-btn {
+  width: 34px; height: 30px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 13px; line-height: 1;
+}
+.reorder-btn:disabled { opacity: .3; }
 .stock-id { display: flex; flex-direction: column; gap: 2px; }
 .stock-name { font-size: 16px; font-weight: 700; }
 .stock-code { font-size: 12px; color: var(--text2); }
+.stock-tag {
+  display: inline-block; font-size: 11px; font-weight: 500; color: var(--text2);
+  border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; margin-left: 4px;
+  vertical-align: middle;
+}
 .stock-note-dot { font-size: 12px; color: var(--text2); }
 .stock-quote { text-align: right; }
 .stock-price { font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; }
