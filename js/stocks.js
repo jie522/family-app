@@ -92,6 +92,16 @@ const Stocks = {
     </div>`;
   },
 
+  /* 產業別/股本/上市日期:來自 data/stocks.json(證交所上市公司基本資料,GitHub Actions 每交易日更新) */
+  companyInfoHtml(q) {
+    if (!q || (!q.ind && !q.ipo && q.cap == null)) return '';
+    return `<div class="fact-grid company-info">
+      <div class="fact"><div class="k">產業別</div><div class="v">${q.ind ? esc(q.ind) : '—'}</div></div>
+      <div class="fact"><div class="k">股本</div><div class="v">${q.cap != null ? q.cap.toLocaleString('zh-TW') + ' 億' : '—'}</div></div>
+      <div class="fact"><div class="k">上市日期</div><div class="v">${q.ipo ? esc(q.ipo) : '—'}</div></div>
+    </div>`;
+  },
+
   render() {
     const meta = document.getElementById('stock-meta');
     const listEl = document.getElementById('stock-list');
@@ -307,6 +317,7 @@ const Stocks = {
         <button data-pane="report">分析報告</button>
       </div>
       <div class="sk-pane active" id="sk-pane-about">
+        ${this.companyInfoHtml(q)}
         <div id="sk-about" class="md-body"><p class="hint">讀取中…</p></div>
       </div>
       <div class="sk-pane" id="sk-pane-industry">

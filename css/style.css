@@ -273,6 +273,7 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 .fact .v { font-size: 15px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .fact .v.up { color: var(--up); }
 .fact .v.down { color: var(--down); }
+.fact-grid.company-info { grid-template-columns: repeat(3, 1fr); margin: 0 0 12px; }
 .big-quote-block {
   border-radius: 14px; padding: 14px 16px; margin-top: 4px;
   background: var(--bg);
