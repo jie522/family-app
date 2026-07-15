@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 8; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 9; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '更新時間'];
@@ -279,25 +279,31 @@ function tmdbSearch(d) {
 function quotes(d) {
   var codes = (d.codes || []).slice(0, 30).map(String);
   if (!codes.length) return { ok: true, quotes: {} };
+  var dbg = d.debug ? [] : null; // debug:true 時回傳每個來源實際收到的狀態碼/內容片段,用來排查連線被擋的問題
   var out = {};
-  fetchTwseMis(codes, 'tse', out);
+  fetchTwseMis(codes, 'tse', out, dbg);
   var misses = codes.filter(function (c) { return !out[c]; });
-  if (misses.length) fetchTwseMis(misses, 'otc', out);
+  if (misses.length) fetchTwseMis(misses, 'otc', out, dbg);
   misses = codes.filter(function (c) { return !out[c]; });
-  if (misses.length) fetchYahooBatch(misses, '.TW', out);
+  if (misses.length) fetchYahooBatch(misses, '.TW', out, dbg);
   misses = codes.filter(function (c) { return !out[c]; });
-  if (misses.length) fetchYahooBatch(misses, '.TWO', out);
-  return { ok: true, quotes: out };
+  if (misses.length) fetchYahooBatch(misses, '.TWO', out, dbg);
+  var result = { ok: true, quotes: out };
+  if (dbg) result.debug = dbg;
+  return result;
 }
 
-function fetchTwseMis(codes, market, out) {
+function fetchTwseMis(codes, market, out, dbg) {
   var exCh = codes.map(function (c) { return market + '_' + c + '.tw'; }).join('|');
   var url = 'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=' + exCh +
     '&json=1&delay=0&_=' + Date.now();
   try {
     var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (res.getResponseCode() !== 200) return;
-    var arr = JSON.parse(res.getContentText()).msgArray || [];
+    var code = res.getResponseCode();
+    var body = res.getContentText();
+    if (dbg) dbg.push({ src: 'twse-' + market, status: code, body: body.slice(0, 300) });
+    if (code !== 200) return;
+    var arr = JSON.parse(body).msgArray || [];
     arr.forEach(function (s) {
       var last = parseFloat(s.z); // 最新成交價;沒成交時是 '-'
       if (isNaN(last)) last = parseFloat(String(s.b || '').split('_')[0]); // 用最佳買價替代
@@ -313,10 +319,12 @@ function fetchTwseMis(codes, market, out) {
         t: s.t || null,
       };
     });
-  } catch (e) { /* 連不上就交給後面的備援 */ }
+  } catch (e) {
+    if (dbg) dbg.push({ src: 'twse-' + market, error: String(e) });
+  }
 }
 
-function fetchYahooBatch(codes, suffix, out) {
+function fetchYahooBatch(codes, suffix, out, dbg) {
   var reqs = codes.map(function (c) {
     return {
       url: 'https://query1.finance.yahoo.com/v8/finance/chart/' +
@@ -325,8 +333,12 @@ function fetchYahooBatch(codes, suffix, out) {
     };
   });
   var resps;
-  try { resps = UrlFetchApp.fetchAll(reqs); } catch (e) { return; }
+  try { resps = UrlFetchApp.fetchAll(reqs); } catch (e) {
+    if (dbg) dbg.push({ src: 'yahoo' + suffix, error: String(e) });
+    return;
+  }
   for (var i = 0; i < resps.length; i++) {
+    if (dbg) dbg.push({ src: 'yahoo' + suffix, code: codes[i], status: resps[i].getResponseCode(), body: resps[i].getContentText().slice(0, 200) });
     var q = parseYahooChart(resps[i]);
     if (q) out[codes[i]] = q;
   }
