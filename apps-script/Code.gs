@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 9; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 10; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '更新時間'];
@@ -274,20 +274,21 @@ function tmdbSearch(d) {
 
 /* ---------- 即時報價代理 ----------
  * 瀏覽器因跨域限制不能直接抓,由這裡代抓再回傳給 App。
- * 主要來源:證交所官方即時 API(mis.twse.com.tw,約延遲 5 秒);
- * 上市用 tse_、查不到再試上櫃 otc_;都失敗才退到 Yahoo(GAS 常被 Yahoo 擋,僅備援)。 */
+ * 主要來源:Yahoo 股市(query1.finance.yahoo.com);上市用 .TW、查不到再試上櫃 .TWO。
+ * 證交所官方 API(mis.twse.com.tw)會擋掉 Google 雲端的連線(實測回 502),
+ * 保留當最後備援,萬一哪天解禁還能撿到。 */
 function quotes(d) {
   var codes = (d.codes || []).slice(0, 30).map(String);
   if (!codes.length) return { ok: true, quotes: {} };
   var dbg = d.debug ? [] : null; // debug:true 時回傳每個來源實際收到的狀態碼/內容片段,用來排查連線被擋的問題
   var out = {};
-  fetchTwseMis(codes, 'tse', out, dbg);
+  fetchYahooBatch(codes, '.TW', out, dbg);
   var misses = codes.filter(function (c) { return !out[c]; });
-  if (misses.length) fetchTwseMis(misses, 'otc', out, dbg);
-  misses = codes.filter(function (c) { return !out[c]; });
-  if (misses.length) fetchYahooBatch(misses, '.TW', out, dbg);
-  misses = codes.filter(function (c) { return !out[c]; });
   if (misses.length) fetchYahooBatch(misses, '.TWO', out, dbg);
+  misses = codes.filter(function (c) { return !out[c]; });
+  if (misses.length) fetchTwseMis(misses, 'tse', out, dbg);
+  misses = codes.filter(function (c) { return !out[c]; });
+  if (misses.length) fetchTwseMis(misses, 'otc', out, dbg);
   var result = { ok: true, quotes: out };
   if (dbg) result.debug = dbg;
   return result;
