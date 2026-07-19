@@ -238,6 +238,16 @@ const Shows = {
       btn.addEventListener('click', () => {
         s.status = btn.dataset.s;
         document.querySelectorAll('#d-status button').forEach(b => b.classList.toggle('active', b === btn));
+        // 標記「看完」時自動記一筆觀看紀錄(今天日期),讓卡片上的📅日期跟排序不用手動補
+        if (btn.dataset.s === 'done') {
+          s.log = s.log || [];
+          const today = todayStr();
+          if (!s.log.some(e => e.date === today)) {
+            s.log.push({ date: today, text: '看完' });
+            this.sync('addLog', { date: today, title: s.title, platform: s.platform || '', note: '看完' });
+            renderLog();
+          }
+        }
         save(); syncShow();
       }));
 
