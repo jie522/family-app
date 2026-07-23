@@ -105,6 +105,17 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 }
 .meta-refresh.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
 
+/* ============ 知識庫 ============ */
+.knowledge-list { display: flex; flex-direction: column; gap: 10px; }
+.knowledge-card {
+  display: block; background: var(--card); border-radius: var(--radius);
+  padding: 14px 16px; box-shadow: var(--shadow);
+  border: none; width: 100%; color: var(--text); text-align: left;
+}
+.knowledge-card-title { font-size: 16px; font-weight: 700; }
+.knowledge-card-summary { font-size: 13px; color: var(--text2); margin-top: 4px; line-height: 1.5; }
+.md-body a.k-link, .md-body a.s-link { font-weight: 700; }
+
 /* 股票詳情頁籤(公司簡介/產業知識/分析報告) */
 .sk-tabs { margin-top: 16px; }
 .sk-pane { display: none; }

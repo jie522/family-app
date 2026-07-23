@@ -70,7 +70,13 @@ function mdToHtml(md) {
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    // 知識庫站內連結:[顯示文字](k:slug) → 給 JS 攔截,不整頁跳轉
+    .replace(/\[([^\]]+)\]\(k:([a-z0-9-]+)\)/g,
+      '<a href="#" class="k-link" data-k="$2">$1</a>')
+    // 跳去股票詳情頁:[顯示文字](s:代號)
+    .replace(/\[([^\]]+)\]\(s:(\d{4,6})\)/g,
+      '<a href="#" class="s-link" data-s="$2">$1</a>');
 
   const lines = md.replace(/<!--[\s\S]*?-->/g, '').split(/\r?\n/);
   const out = [];

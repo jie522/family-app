@@ -22,9 +22,11 @@ document.getElementById('modal-backdrop').addEventListener('click', e => {
 const PAGES = {
   stocks: { title: '台股追蹤', add: () => Stocks.openAdd() },
   shows: { title: '追劇清單', add: () => Shows.openAdd() },
+  knowledge: { title: '知識庫', add: null },
   settings: { title: '設定', add: null },
 };
 let currentPage = 'stocks';
+let knowledgeLoaded = false;
 
 function switchPage(page) {
   currentPage = page;
@@ -34,6 +36,10 @@ function switchPage(page) {
     p.classList.toggle('active', p.id === 'page-' + page));
   document.getElementById('header-title').textContent = PAGES[page].title;
   document.getElementById('header-action').classList.toggle('hidden', !PAGES[page].add);
+  if (page === 'knowledge' && !knowledgeLoaded) {
+    knowledgeLoaded = true;
+    Knowledge.render();
+  }
 }
 
 document.querySelectorAll('.tab').forEach(tab =>

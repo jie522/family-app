@@ -33,6 +33,19 @@ App 的股票詳情頁用「公司簡介/產業知識/分析報告」**三個頁
 
 兩者可以互相參照(例如 `Log/` 裡的深度分析,提煉出重點後寫成 `reports/` 的精簡版),但不是同一份東西,不要把兩者的內容互相覆蓋。
 
+### 公開知識庫(App 裡的「知識庫」頁籤)
+
+`knowledge/` 資料夾是**公開版**的產業知識與投資框架,會推上 GitHub、顯示在 App 底部導覽「📚 知識庫」頁籤裡,是獨立的全域頁面(不綁定單一股票)。跟 `Wiki/Concepts/` 的差異:
+
+- `Wiki/Concepts/<概念>.md` — 私人版,可以有比較細的個人判斷、日期戳記的推論過程,不公開
+- `knowledge/<slug>.md` — 公開版,拿掉 Obsidian 的 `[[雙向連結]]`語法和 YAML frontmatter,改寫成全家都看得懂的口吻;`knowledge/manifest.json` 是索引(`[{slug,title,summary}, ...]`)
+
+**站內連結語法**(`js/store.js` 的 `mdToHtml()` 支援):
+- `[顯示文字](k:另一個slug)` → 跳到知識庫另一篇文章
+- `[顯示文字](s:股票代號)` → 跳去該股票的詳情頁(股票不在追蹤清單裡會提示去搜尋加入)
+
+當一個 Concept 頁「值得讓全家看到、且內容本身沒有個人敏感判斷」時,才把它也寫一份公開版到 `knowledge/`(不是每個 Wiki Concept 都要公開)。新增 `knowledge/*.md` 記得同步更新 `knowledge/manifest.json`。
+
 ### 報告 → 知識庫的自動 Ingest(股票報告工作流)
 
 每次新增或大幅更新 `reports/` 的股票報告後,**自動執行一次 Ingest** 把知識提煉進 Wiki(不用再問使用者):

@@ -1,0 +1,9 @@
+[
+  { "slug": "packaging-testing", "title": "封裝與測試", "summary": "晶片做好之後,怎麼包裝、怎麼檢查良率——半導體後段的關鍵環節" },
+  { "slug": "wafer-foundry", "title": "晶圓代工", "summary": "台積電在做的生意模式:只幫別人代工生產晶片,自己不設計不賣品牌" },
+  { "slug": "ai-supply-chain", "title": "AI供應鏈", "summary": "從一顆 AI 晶片到一整櫃 AI 伺服器,台股在這條鏈上扮演的角色" },
+  { "slug": "server-mechanical-parts", "title": "伺服器機構零件", "summary": "AI 伺服器裡不是晶片、卻少了就不能用的零件——隱形冠軍股的框架" },
+  { "slug": "foldable-hinge", "title": "折疊手機轉軸", "summary": "一支折疊手機要用上百個轉軸零件,是傳統筆電轉軸的好幾倍" },
+  { "slug": "non-red-supply-chain", "title": "非紅供應鏈", "summary": "美中角力下,「不要中國製造」的供應鏈重組商機" },
+  { "slug": "disposition-stock-risk", "title": "處置股追高風險", "summary": "飆股被交易所盯上、重挫之後怎麼判斷是暫時修正還是真的出問題" }
+]
