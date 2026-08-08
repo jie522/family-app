@@ -122,6 +122,68 @@ const Stocks = {
     </div>`;
   },
 
+  foreignHistory: null,
+
+  /* data/foreign.json:{ 代號: [{d:日期, n:外資買賣超股數}, ...] },只有 reports/manifest.json 裡追蹤的股票才有資料
+   * 每交易日由 GitHub Actions 累加一筆(scripts/fetch_foreign.mjs),所以剛上線時筆數很少,要累積一段時間才看得出趨勢 */
+  async loadForeignHistory() {
+    if (this.foreignHistory) return this.foreignHistory;
+    try {
+      const res = await fetch('data/foreign.json', { cache: 'no-cache' });
+      this.foreignHistory = res.ok ? await res.json() : {};
+    } catch { this.foreignHistory = {}; }
+    return this.foreignHistory;
+  },
+
+  /* 最新一日 + 近期累計買賣超(換算成張,1張=1000股) */
+  foreignSummaryHtml(history) {
+    const latest = history[history.length - 1];
+    const latestLots = Math.round(latest.n / 1000);
+    const sumLots = Math.round(history.reduce((a, p) => a + p.n, 0) / 1000);
+    const dirText = (lots) => lots > 0 ? '買超' : lots < 0 ? '賣超' : '平盤';
+    const dirCls = (lots) => lots > 0 ? 'up' : lots < 0 ? 'down' : '';
+    return `<div class="fact-grid">
+      <div class="fact"><div class="k">最新交易日(${esc(latest.d)})</div><div class="v ${dirCls(latestLots)}">${dirText(latestLots)} ${Math.abs(latestLots).toLocaleString('zh-TW')} 張</div></div>
+      <div class="fact"><div class="k">近 ${history.length} 個交易日累計</div><div class="v ${dirCls(sumLots)}">${dirText(sumLots)} ${Math.abs(sumLots).toLocaleString('zh-TW')} 張</div></div>
+    </div>`;
+  },
+
+  /* 外資買賣超柱狀圖:買超畫在中線上方(紅),賣超畫在下方(綠),跟台股漲跌色一致 */
+  foreignBarSvg(history) {
+    const w = 300, h = 60, pad = 4;
+    const midY = h / 2;
+    const maxAbs = Math.max(...history.map(p => Math.abs(p.n)), 1);
+    const stepX = (w - pad * 2) / history.length;
+    const barW = Math.max(2, stepX - 2);
+    const bars = history.map((p, i) => {
+      const x = pad + i * stepX + (stepX - barW) / 2;
+      const barH = Math.max(Math.abs(p.n) / maxAbs * (midY - pad), 0.5);
+      const y = p.n >= 0 ? midY - barH : midY;
+      const cls = p.n > 0 ? 'chg-up' : p.n < 0 ? 'chg-down' : 'chg-flat';
+      return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" class="forbar-rect ${cls}"></rect>`;
+    }).join('');
+    return `<div class="spark-wrap">
+      <svg viewBox="0 0 ${w} ${h}" class="forbar-svg">
+        <line x1="${pad}" y1="${midY}" x2="${w - pad}" y2="${midY}" class="forbar-baseline"></line>
+        ${bars}
+      </svg>
+      <div class="spark-label">近 ${history.length} 個交易日外資買賣超(紅=買超‧綠=賣超)</div>
+    </div>`;
+  },
+
+  async loadForeignSection(code) {
+    const box = document.getElementById('sk-foreign');
+    if (!box) return;
+    const data = await this.loadForeignHistory();
+    if (!document.getElementById('sk-foreign')) return; // 彈窗已被關掉
+    const history = data[code];
+    if (!history || !history.length) {
+      box.innerHTML = '<p class="hint">外資買賣超資料還沒開始累積(每個交易日收盤後才會多一筆,需要累積幾天才看得出趨勢)。</p>';
+      return;
+    }
+    box.innerHTML = this.foreignSummaryHtml(history) + this.foreignBarSvg(history);
+  },
+
   /* 產業別/股本/上市日期:來自 data/stocks.json(證交所上市公司基本資料,GitHub Actions 每交易日更新) */
   companyInfoHtml(q) {
     if (!q || (!q.ind && !q.ipo && q.cap == null)) return '';
@@ -369,6 +431,10 @@ const Stocks = {
         </div>
       </div>
       ${q?.spark ? this.sparklineSvg(q.spark) : ''}
+      <div class="foreign-block">
+        <h3 class="foreign-title">外資買賣超</h3>
+        <div id="sk-foreign"><p class="hint">讀取中…</p></div>
+      </div>
       ${q ? `<div class="fact-grid">
         <div class="fact"><div class="k">開盤</div><div class="v">${q.o != null ? q.o.toFixed(2) : '—'}</div></div>
         <div class="fact"><div class="k">最高</div><div class="v up">${q.h != null ? q.h.toFixed(2) : '—'}</div></div>
@@ -413,6 +479,7 @@ const Stocks = {
       }));
 
     this.loadReportsSection(code);
+    this.loadForeignSection(code);
 
     let noteTimer;
     document.getElementById('sk-notes').addEventListener('input', e => {
