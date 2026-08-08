@@ -331,9 +331,21 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 }
 .spark-ma-label { color: var(--accent); }
 
-/* 外資買賣超柱狀圖 */
-.foreign-block { margin-top: 10px; }
-.foreign-title { font-size: 13px; color: var(--text2); margin: 0 0 6px; font-weight: 700; }
+/* 籌碼面頁籤(外資買賣超 / 融資餘額 / 股權分散) */
+.chip-sec { margin-bottom: 18px; }
+.chip-sec:last-of-type { margin-bottom: 10px; }
+.chip-title {
+  font-size: 14px; margin: 0 0 6px; font-weight: 700;
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+}
+.chip-sub { font-size: 11px; color: var(--text2); font-weight: 400; }
+/* 資料來源/免責註解是附註性質,壓小免得跟數字搶焦點(.hint 預設 16px 太大) */
+.chip-note { margin-top: 6px; line-height: 1.5; font-size: 12px; }
+.hold-delta { font-size: 12px; font-weight: 700; }
+.hold-delta.up { color: var(--up); }
+.hold-delta.down { color: var(--down); }
+/* 四個頁籤時字比較擠,padding 收一點讓小螢幕能一次看完 */
+.sk-tabs button { padding: 8px 13px; }
 .forbar-svg { width: 100%; height: 64px; display: block; }
 .forbar-rect.chg-up { fill: var(--up); }
 .forbar-rect.chg-down { fill: var(--down); }

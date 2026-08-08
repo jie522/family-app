@@ -123,6 +123,7 @@ const Stocks = {
   },
 
   foreignHistory: null,
+  retailHistory: null,
 
   /* data/foreign.json:{ 代號: [{d:日期, n:外資買賣超股數}, ...] },只有 reports/manifest.json 裡追蹤的股票才有資料
    * 每交易日由 GitHub Actions 累加一筆(scripts/fetch_foreign.mjs),所以剛上線時筆數很少,要累積一段時間才看得出趨勢 */
@@ -133,6 +134,18 @@ const Stocks = {
       this.foreignHistory = res.ok ? await res.json() : {};
     } catch { this.foreignHistory = {}; }
     return this.foreignHistory;
+  },
+
+  /* data/retail.json:{ 代號: { margin:[{d,bal,chg}], holders:[{d,rp,bp,rn}] } }
+   * margin  = 融資餘額(張)與較前日增減,每交易日一筆
+   * holders = 集保股權分散,rp 散戶持股比例%、bp 大戶持股比例%、rn 散戶人數,每週五一筆 */
+  async loadRetailHistory() {
+    if (this.retailHistory) return this.retailHistory;
+    try {
+      const res = await fetch('data/retail.json', { cache: 'no-cache' });
+      this.retailHistory = res.ok ? await res.json() : {};
+    } catch { this.retailHistory = {}; }
+    return this.retailHistory;
   },
 
   /* 最新一日 + 近期累計買賣超(換算成張,1張=1000股) */
@@ -148,18 +161,19 @@ const Stocks = {
     </div>`;
   },
 
-  /* 外資買賣超柱狀圖:買超畫在中線上方(紅),賣超畫在下方(綠),跟台股漲跌色一致 */
-  foreignBarSvg(history) {
+  /* 正負柱狀圖:正值畫在中線上方(紅),負值畫在下方(綠),跟台股漲跌色一致。
+   * 外資買賣超和融資餘額增減共用這一個。 */
+  barChartSvg(values, label) {
     const w = 300, h = 60, pad = 4;
     const midY = h / 2;
-    const maxAbs = Math.max(...history.map(p => Math.abs(p.n)), 1);
-    const stepX = (w - pad * 2) / history.length;
+    const maxAbs = Math.max(...values.map(v => Math.abs(v)), 1);
+    const stepX = (w - pad * 2) / values.length;
     const barW = Math.max(2, stepX - 2);
-    const bars = history.map((p, i) => {
+    const bars = values.map((v, i) => {
       const x = pad + i * stepX + (stepX - barW) / 2;
-      const barH = Math.max(Math.abs(p.n) / maxAbs * (midY - pad), 0.5);
-      const y = p.n >= 0 ? midY - barH : midY;
-      const cls = p.n > 0 ? 'chg-up' : p.n < 0 ? 'chg-down' : 'chg-flat';
+      const barH = Math.max(Math.abs(v) / maxAbs * (midY - pad), 0.5);
+      const y = v >= 0 ? midY - barH : midY;
+      const cls = v > 0 ? 'chg-up' : v < 0 ? 'chg-down' : 'chg-flat';
       return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" class="forbar-rect ${cls}"></rect>`;
     }).join('');
     return `<div class="spark-wrap">
@@ -167,21 +181,95 @@ const Stocks = {
         <line x1="${pad}" y1="${midY}" x2="${w - pad}" y2="${midY}" class="forbar-baseline"></line>
         ${bars}
       </svg>
-      <div class="spark-label">近 ${history.length} 個交易日外資買賣超(紅=買超‧綠=賣超)</div>
+      <div class="spark-label">${esc(label)}</div>
     </div>`;
   },
 
-  async loadForeignSection(code) {
-    const box = document.getElementById('sk-foreign');
+  /* 折線圖(用在散戶持股比例這種一路連續的百分比,不像買賣超有正負之分) */
+  pctLineSvg(values, label) {
+    const w = 300, h = 60, pad = 6;
+    const min = Math.min(...values), max = Math.max(...values);
+    const span = (max - min) || 1;
+    const stepX = (w - pad * 2) / (values.length - 1);
+    const pts = values.map((v, i) =>
+      `${(pad + i * stepX).toFixed(1)},${(pad + (1 - (v - min) / span) * (h - pad * 2)).toFixed(1)}`);
+    const cls = values[values.length - 1] >= values[0] ? 'chg-up' : 'chg-down';
+    return `<div class="spark-wrap">
+      <svg viewBox="0 0 ${w} ${h}" class="spark-svg ${cls}">
+        <polyline points="${pts.join(' ')}" class="spark-line"></polyline>
+      </svg>
+      <div class="spark-label">${esc(label)}(${min.toFixed(2)}% ~ ${max.toFixed(2)}%)</div>
+    </div>`;
+  },
+
+  /* 融資餘額:借錢買股票的槓桿資金,絕大多數是散戶,增加代表散戶加碼、減少代表散戶退場 */
+  marginHtml(margin) {
+    const latest = margin[margin.length - 1];
+    const chg = latest.chg;
+    const cls = chg > 0 ? 'up' : chg < 0 ? 'down' : '';
+    const chgText = chg == null ? '—'
+      : `${chg > 0 ? '增加' : chg < 0 ? '減少' : '持平'} ${Math.abs(chg).toLocaleString('zh-TW')} 張`;
+    const withChg = margin.filter(p => p.chg != null);
+    const chart = withChg.length
+      ? this.barChartSvg(withChg.map(p => p.chg),
+          `近 ${withChg.length} 個交易日融資增減(紅=散戶加碼‧綠=散戶退場)`)
+      : '';
+    return `<div class="fact-grid">
+      <div class="fact"><div class="k">融資餘額(${esc(latest.d)})</div><div class="v">${latest.bal.toLocaleString('zh-TW')} 張</div></div>
+      <div class="fact"><div class="k">較前一日</div><div class="v ${cls}">${chgText}</div></div>
+    </div>${chart}`;
+  },
+
+  /* 集保股權分散:散戶=持股 10 張以下,大戶=持股 400 張以上。
+   * 散戶比例降、大戶比例升,一般解讀成籌碼往大戶集中。 */
+  holdersHtml(holders) {
+    const latest = holders[holders.length - 1];
+    const prev = holders.length > 1 ? holders[holders.length - 2] : null;
+    const delta = prev ? latest.rp - prev.rp : null;
+    const deltaText = delta == null ? ''
+      : ` <span class="hold-delta ${delta > 0 ? 'up' : delta < 0 ? 'down' : ''}">${delta > 0 ? '+' : ''}${delta.toFixed(2)}</span>`;
+    const chart = holders.length > 1
+      ? this.pctLineSvg(holders.map(p => p.rp), `近 ${holders.length} 週散戶持股比例`)
+      : '';
+    return `<div class="fact-grid">
+      <div class="fact"><div class="k">散戶持股(10張以下)</div><div class="v">${latest.rp.toFixed(2)}%${deltaText}</div></div>
+      <div class="fact"><div class="k">大戶持股(400張以上)</div><div class="v">${latest.bp.toFixed(2)}%</div></div>
+      <div class="fact"><div class="k">散戶人數</div><div class="v">${latest.rn.toLocaleString('zh-TW')}</div></div>
+    </div>${chart}
+    <p class="hint chip-note">資料日期 ${esc(latest.d)}(集保結算所每週五收盤後更新)${prev ? '' : ',要累積到第二週才看得出增減'}</p>`;
+  },
+
+  /* 籌碼面頁籤:外資(法人)+ 融資餘額、集保股權分散(散戶代理指標) */
+  async loadChipsSection(code) {
+    const box = document.getElementById('sk-chips');
     if (!box) return;
-    const data = await this.loadForeignHistory();
-    if (!document.getElementById('sk-foreign')) return; // 彈窗已被關掉
-    const history = data[code];
-    if (!history || !history.length) {
-      box.innerHTML = '<p class="hint">外資買賣超資料還沒開始累積(每個交易日收盤後才會多一筆,需要累積幾天才看得出趨勢)。</p>';
-      return;
-    }
-    box.innerHTML = this.foreignSummaryHtml(history) + this.foreignBarSvg(history);
+    const [foreignData, retailData] = await Promise.all([
+      this.loadForeignHistory(), this.loadRetailHistory(),
+    ]);
+    if (!document.getElementById('sk-chips')) return; // 彈窗已被關掉
+
+    const foreign = foreignData[code];
+    const retail = retailData[code] || {};
+    const notYet = (what) =>
+      `<p class="hint">${what}還沒開始累積(收盤後才會多一筆,需要累積幾天才看得出趨勢)。</p>`;
+
+    box.innerHTML = `
+      <div class="chip-sec">
+        <h3 class="chip-title">外資買賣超</h3>
+        ${foreign?.length
+          ? this.foreignSummaryHtml(foreign) + this.barChartSvg(foreign.map(p => p.n),
+              `近 ${foreign.length} 個交易日外資買賣超(紅=買超‧綠=賣超)`)
+          : notYet('外資買賣超資料')}
+      </div>
+      <div class="chip-sec">
+        <h3 class="chip-title">融資餘額<span class="chip-sub">散戶槓桿資金</span></h3>
+        ${retail.margin?.length ? this.marginHtml(retail.margin) : notYet('融資餘額資料')}
+      </div>
+      <div class="chip-sec">
+        <h3 class="chip-title">股權分散<span class="chip-sub">散戶 vs 大戶</span></h3>
+        ${retail.holders?.length ? this.holdersHtml(retail.holders) : notYet('集保股權分散資料')}
+      </div>
+      <p class="hint chip-note">⚠️ 台股沒有官方的個股散戶買賣超,融資餘額與股權分散是市場常用的散戶代理指標,只能推估方向,不是精確的散戶進出金額。</p>`;
   },
 
   /* 產業別/股本/上市日期:來自 data/stocks.json(證交所上市公司基本資料,GitHub Actions 每交易日更新) */
@@ -431,10 +519,6 @@ const Stocks = {
         </div>
       </div>
       ${q?.spark ? this.sparklineSvg(q.spark) : ''}
-      <div class="foreign-block">
-        <h3 class="foreign-title">外資買賣超</h3>
-        <div id="sk-foreign"><p class="hint">讀取中…</p></div>
-      </div>
       ${q ? `<div class="fact-grid">
         <div class="fact"><div class="k">開盤</div><div class="v">${q.o != null ? q.o.toFixed(2) : '—'}</div></div>
         <div class="fact"><div class="k">最高</div><div class="v up">${q.h != null ? q.h.toFixed(2) : '—'}</div></div>
@@ -449,6 +533,7 @@ const Stocks = {
       <div class="segmented sk-tabs" id="sk-tabs">
         <button data-pane="about" class="active">公司簡介</button>
         <button data-pane="industry">產業知識</button>
+        <button data-pane="chips">籌碼面</button>
         <button data-pane="report">分析報告</button>
       </div>
       <div class="sk-pane active" id="sk-pane-about">
@@ -457,6 +542,9 @@ const Stocks = {
       </div>
       <div class="sk-pane" id="sk-pane-industry">
         <div id="sk-industry" class="md-body"><p class="hint">讀取中…</p></div>
+      </div>
+      <div class="sk-pane" id="sk-pane-chips">
+        <div id="sk-chips"><p class="hint">讀取中…</p></div>
       </div>
       <div class="sk-pane" id="sk-pane-report">
         <div class="report-dates" id="sk-report-dates"></div>
@@ -469,17 +557,17 @@ const Stocks = {
       <button class="btn danger block" id="sk-delete">取消追蹤</button>
     `);
 
-    // 公司簡介/產業知識/分析報告 三個頁籤切換
+    // 公司簡介/產業知識/籌碼面/分析報告 四個頁籤切換
     const tabs = document.getElementById('sk-tabs');
     tabs.querySelectorAll('button').forEach(btn =>
       btn.addEventListener('click', () => {
         tabs.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
-        ['about', 'industry', 'report'].forEach(p =>
+        ['about', 'industry', 'chips', 'report'].forEach(p =>
           document.getElementById('sk-pane-' + p).classList.toggle('active', p === btn.dataset.pane));
       }));
 
     this.loadReportsSection(code);
-    this.loadForeignSection(code);
+    this.loadChipsSection(code);
 
     let noteTimer;
     document.getElementById('sk-notes').addEventListener('input', e => {
