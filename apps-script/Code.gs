@@ -14,10 +14,10 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 11; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 12; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
-var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '更新時間'];
+var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '開始追劇日期', '更新時間'];
 var STOCK_TAB = '股票追蹤';
 var STOCK_HEADERS = ['代號', '名稱', '筆記', '更新時間'];
 var REPORT_TAB = 'FAMAILY APP - 股票'; // 股票分析報告鏡像(reports/ 資料夾內容的雲端備份)
@@ -145,7 +145,7 @@ function deleteLog(d) {
 function showRowValues(d) {
   return [d.title || '', d.platform || '', d.status || '追劇中', d.rating || 0,
           d.notes || '', d.poster || '', d.year || '', d.type || '影集',
-          d.overview || '', d.tmdbId || '', new Date()];
+          d.overview || '', d.tmdbId || '', d.startDate || '', new Date()];
 }
 
 function upsertShow(d) {

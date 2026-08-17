@@ -186,6 +186,7 @@ const Sheets = {
       type: s.type === 'movie' ? '電影' : '影集',
       overview: (s.overview || '').slice(0, 500),
       tmdbId: s.tmdbId || '',
+      startDate: s.startDate || '',
     };
   },
 

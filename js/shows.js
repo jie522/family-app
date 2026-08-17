@@ -51,6 +51,7 @@ const Shows = {
         <div class="show-card-body">
           <div class="show-card-title">${esc(s.title)}</div>
           <div class="show-card-sub"><span class="chip ${chipCls}">${this.STATUS[s.status] || ''}</span>${stars}</div>
+          ${s.startDate ? `<div class="show-card-sub">🎬 開始:${esc(s.startDate)}</div>` : ''}
           ${watchDate ? `<div class="show-card-sub">📅 ${esc(watchDate)}</div>` : ''}
           ${s.platform ? `<div class="show-card-sub">${esc(s.platform)}</div>` : ''}
         </div>
@@ -167,6 +168,7 @@ const Shows = {
       rating: 0,
       notes: '',
       log: [],
+      startDate: '',
       addedAt: Date.now(),
     };
     list.push(show);
@@ -204,6 +206,9 @@ const Shows = {
           `<button data-s="${k}" class="${s.status === k ? 'active' : ''}">${v}</button>`).join('')}
       </div>
 
+      <label>開始追劇日期</label>
+      <input type="date" id="d-start" value="${esc(s.startDate || '')}">
+
       <label>平台</label>
       ${this.platformInput('d-platform', s.platform || '')}
 
@@ -238,6 +243,11 @@ const Shows = {
       btn.addEventListener('click', () => {
         s.status = btn.dataset.s;
         document.querySelectorAll('#d-status button').forEach(b => b.classList.toggle('active', b === btn));
+        // 第一次轉成「追劇中」時,自動補開始追劇日期(今天),不用手動填
+        if (btn.dataset.s === 'watching' && !s.startDate) {
+          s.startDate = todayStr();
+          document.getElementById('d-start').value = s.startDate;
+        }
         // 標記「看完」時自動記一筆觀看紀錄(今天日期),讓卡片上的📅日期跟排序不用手動補
         if (btn.dataset.s === 'done') {
           s.log = s.log || [];
@@ -250,6 +260,12 @@ const Shows = {
         }
         save(); syncShow();
       }));
+
+    // 開始追劇日期
+    document.getElementById('d-start').addEventListener('change', e => {
+      s.startDate = e.target.value;
+      save(); syncShow();
+    });
 
     // 平台
     document.getElementById('d-platform').addEventListener('input', e => {
@@ -296,11 +312,15 @@ const Shows = {
       s.log.push({ date, text });
       document.getElementById('d-log-text').value = '';
       this.sync('addLog', { date, title: s.title, platform: s.platform || '', note: text });
-      // 有在看就自動轉「追劇中」
+      // 有在看就自動轉「追劇中」,順便補開始追劇日期
       if (s.status === 'want') {
         s.status = 'watching';
         document.querySelectorAll('#d-status button').forEach(b =>
           b.classList.toggle('active', b.dataset.s === 'watching'));
+        if (!s.startDate) {
+          s.startDate = date;
+          document.getElementById('d-start').value = s.startDate;
+        }
         syncShow();
       }
       save(); renderLog();
