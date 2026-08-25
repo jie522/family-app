@@ -88,8 +88,17 @@ const Sheets = {
     catch { stockRows = null; }
 
     const shows = new Map();
-    // 劇集庫:劇名,平台,狀態,評分,筆記,海報,年份,類型,簡介,TMDBID
-    showRows.slice(1).forEach(([title, platform, statusZh, rating, notes, poster, year, type, overview, tmdbId], i) => {
+    // 劇集庫:劇名,平台,狀態,評分,筆記,海報,年份,類型,簡介,TMDBID,開始追劇日期
+    // ⚠️ 之前這裡漏讀了「開始追劇日期」欄(表頭的第 11 欄),即使 showToRow() 有正確送出去,
+    // pull() 重建本機清單時也會直接漏掉這個欄位,導致每次同步都把它洗掉——這是
+    // 「開始追劇日期會不見」的根本原因,不是網路時序問題,是這裡的欄位對應少寫了一個。
+    // 舊版 Sheet 表頭(還沒手動插入這欄之前)第 11 欄其實是「更新時間」,先核對表頭文字
+    // 再決定要不要讀,不然舊資料的時間戳記會被誤當成開始追劇日期讀進來。
+    // Sheet 還沒補上這欄的期間,一律保留手機本機原本的值、不要用空字串蓋掉——
+    // 不然使用者在等家人補這個欄位的這段時間,每次同步都會看到日期消失。
+    const hasStartDateCol = showRows[0]?.[10] === '開始追劇日期';
+    const prevStartDates = new Map(Store.load('shows', []).map(s => [s.title, s.startDate || '']));
+    showRows.slice(1).forEach(([title, platform, statusZh, rating, notes, poster, year, type, overview, tmdbId, startDate], i) => {
       title = (title || '').trim();
       if (!title) return;
       shows.set(title, {
@@ -104,6 +113,7 @@ const Sheets = {
         type: type === '電影' ? 'movie' : 'tv',
         overview: overview || '',
         tmdbId: tmdbId ? +tmdbId : null,
+        startDate: hasStartDateCol ? (startDate ? this.normDate(startDate) : '') : (prevStartDates.get(title) || ''),
         log: [],
         addedAt: i + 1,
       });
@@ -117,7 +127,7 @@ const Sheets = {
         shows.set(title, {
           id: 't:' + title, title, platform: platform || '',
           status: 'watching', rating: 0, notes: '', poster: '',
-          year: '', type: 'tv', overview: '', tmdbId: null,
+          year: '', type: 'tv', overview: '', tmdbId: null, startDate: '',
           log: [], addedAt: 1000 + i,
         });
       }
