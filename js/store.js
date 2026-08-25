@@ -1,6 +1,6 @@
 /* 資料儲存:localStorage 包裝 + 匯出匯入 */
 const Store = {
-  KEYS: { shows: 'fam.shows', stocks: 'fam.stocks', settings: 'fam.settings' },
+  KEYS: { shows: 'fam.shows', stocks: 'fam.stocks', settings: 'fam.settings', pendingSync: 'fam.pendingSync' },
 
   load(key, fallback) {
     try {

@@ -99,6 +99,7 @@ function refreshSyncStatus() {
 
 async function pullAndRender() {
   try {
+    await Sheets.flushPending(); // 先補送上次來不及送出的變更,免得等一下被 pull() 的舊資料蓋掉
     await Sheets.pull();
     Shows.render();
     Stocks.render();

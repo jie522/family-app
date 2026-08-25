@@ -163,14 +163,47 @@ const Sheets = {
     return res.json();
   },
 
-  /* 單純的寫入動作(新增/刪除/筆記…),只在乎成不成功 */
+  /* 單純的寫入動作(新增/刪除/筆記…),只在乎成不成功。
+   * ⚠️ 寫入前先把「打算做什麼」同步存進本機的待送出佇列,寫入成功才移除——
+   * 這樣即使打字/選照片後立刻關掉 App,網路請求根本來不及送出,下次開 App 時
+   * 也不會憑空消失:pullAndRender() 會先補送這個佇列,才去抓 Sheet 最新資料。
+   * 少了這一步的話,pull() 會直接拿 Sheet 上還沒收到這筆寫入的舊資料整批蓋掉
+   * 本機的 shows/stocks,看起來就像「剛剛存的東西不見了」。 */
   async push(action, data) {
     if (!this.scriptUrl()) return false;
+    const id = this.addPending(action, data);
     try {
       const json = await this.call(action, data);
+      if (json.ok) this.removePending(id);
       return !!json.ok;
     } catch {
-      return false;
+      return false; // 留在待送出佇列裡,下次 flushPending() 會重試
+    }
+  },
+
+  pendingKey: 'pendingSync',
+
+  addPending(action, data) {
+    const q = Store.load(this.pendingKey, []);
+    const id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+    q.push({ id, action, data });
+    Store.save(this.pendingKey, q);
+    return id;
+  },
+
+  removePending(id) {
+    Store.save(this.pendingKey, Store.load(this.pendingKey, []).filter(p => p.id !== id));
+  },
+
+  /* App 啟動時、或每次要 pull() 之前呼叫:先把上次沒送成功(或來不及送出就關掉 App)
+   * 的動作補送出去,確認送到才從佇列移除,還是連不上就留著下次再試。 */
+  async flushPending() {
+    const q = Store.load(this.pendingKey, []);
+    for (const p of q) {
+      try {
+        const json = await this.call(p.action, p.data);
+        if (json.ok) this.removePending(p.id);
+      } catch { /* 還是連不上,留著下次再補送 */ }
     }
   },
 

@@ -304,7 +304,11 @@ const Shows = {
     let upsertTimer;
     const syncShow = (delay = 0) => {
       clearTimeout(upsertTimer);
-      upsertTimer = setTimeout(() => this.sync('upsertShow', Sheets.showToRow(s)), delay);
+      // delay=0(切狀態/選日期/評分/上傳照片)要馬上同步執行,不能借道 setTimeout(fn,0)——
+      // 那還是會讓出一個事件迴圈的空檔,萬一使用者在那個瞬間就關掉 App,連「待送出佇列」
+      // 都來不及寫進 localStorage,一樣會遺失。只有真的要防抖動的欄位(打字類)才用 setTimeout。
+      if (delay > 0) upsertTimer = setTimeout(() => this.sync('upsertShow', Sheets.showToRow(s)), delay);
+      else this.sync('upsertShow', Sheets.showToRow(s));
     };
 
     // 上傳照片(取代/新增海報,跟 TMDB 抓到的海報共用同一個欄位)
