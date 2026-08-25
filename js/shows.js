@@ -22,6 +22,50 @@ const Shows = {
     });
   },
 
+  /* 手動上傳照片:直接壓成 JPEG data URI 存進 poster 欄位(跟 TMDB 海報網址共用同一格),
+   * 不用另外接圖床或改 Apps Script。要壓在 Google Sheet 單一儲存格 5 萬字元上限內,
+   * 所以從畫質高往低試,選第一個壓得夠小的版本。 */
+  readImageFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  },
+
+  async compressPoster(dataUrl) {
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = reject;
+      im.src = dataUrl;
+    });
+    const attempts = [[320, 0.75], [320, 0.5], [240, 0.5], [180, 0.4]];
+    let out = '';
+    for (const [maxW, q] of attempts) {
+      const scale = Math.min(1, maxW / img.width);
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      out = canvas.toDataURL('image/jpeg', q);
+      if (out.length < 42000) return out; // 留餘裕給 Sheet 儲存格上限
+    }
+    return out; // 壓到最小版本還是超過,就用能壓到的最小版本
+  },
+
+  async pickAndCompress(file) {
+    if (!file) return null;
+    if (!file.type.startsWith('image/')) { toast('請選擇圖片檔'); return null; }
+    try {
+      return await this.compressPoster(await this.readImageFile(file));
+    } catch {
+      toast('圖片處理失敗,換一張試試');
+      return null;
+    }
+  },
+
   render() {
     const grid = document.getElementById('show-grid');
     const empty = document.getElementById('show-empty');
@@ -139,16 +183,35 @@ const Shows = {
       <input type="text" id="m-title" placeholder="劇名或電影名">
       <label>平台</label>
       ${this.platformInput('m-platform')}
-      <label>海報圖片網址(可留空)</label>
+      <label>海報圖片(可貼網址,或直接上傳照片,兩者留空也可以)</label>
       <input type="url" id="m-poster" placeholder="https://…">
+      <div class="btn-row">
+        <button type="button" class="btn" id="m-poster-upload">📷 上傳照片</button>
+        <input type="file" id="m-poster-file" accept="image/*" hidden>
+      </div>
+      <div id="m-poster-preview"></div>
       <button class="btn primary block" id="m-add">加入清單</button>
     `;
+    let uploadedPoster = '';
+    container.querySelector('#m-poster-upload').addEventListener('click', () =>
+      container.querySelector('#m-poster-file').click());
+    container.querySelector('#m-poster-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      const dataUrl = await this.pickAndCompress(file);
+      if (!dataUrl) return;
+      uploadedPoster = dataUrl;
+      container.querySelector('#m-poster').value = ''; // 上傳照片優先,清空網址欄避免混淆
+      container.querySelector('#m-poster-preview').innerHTML =
+        `<img src="${dataUrl}" alt="" style="width:64px;aspect-ratio:2/3;object-fit:cover;border-radius:8px;margin-top:6px">`;
+      toast('照片已選好,按下面「加入清單」送出');
+    });
     container.querySelector('#m-add').addEventListener('click', () => {
       const title = container.querySelector('#m-title').value.trim();
       if (!title) { toast('請輸入名稱'); return; }
       this.add({
         tmdbId: null, type: 'tv', title,
-        year: '', poster: container.querySelector('#m-poster').value.trim(), overview: '',
+        year: '', poster: uploadedPoster || container.querySelector('#m-poster').value.trim(), overview: '',
         platform: container.querySelector('#m-platform').value.trim(),
       });
     });
@@ -192,7 +255,13 @@ const Shows = {
     Modal.open(`
       <button class="modal-close" data-close>✕</button>
       <div class="detail-head">
-        ${s.poster ? `<img class="detail-poster" src="${esc(s.poster)}" alt="">` : ''}
+        <div class="detail-poster-wrap">
+          <img class="detail-poster" id="d-poster-img" src="${esc(s.poster)}" alt=""
+               style="${s.poster ? '' : 'display:none'}">
+          <div class="detail-poster placeholder" id="d-poster-ph" style="${s.poster ? 'display:none' : ''}">🎬</div>
+          <button type="button" class="poster-upload-btn" id="d-poster-btn" title="上傳照片">📷</button>
+          <input type="file" id="d-poster-file" accept="image/*" hidden>
+        </div>
         <div>
           <div class="detail-title">${esc(s.title)}</div>
           <div class="detail-sub">${s.type === 'movie' ? '電影' : '影集'}${s.year ? ' · ' + esc(s.year) : ''}</div>
@@ -237,6 +306,24 @@ const Shows = {
       clearTimeout(upsertTimer);
       upsertTimer = setTimeout(() => this.sync('upsertShow', Sheets.showToRow(s)), delay);
     };
+
+    // 上傳照片(取代/新增海報,跟 TMDB 抓到的海報共用同一個欄位)
+    document.getElementById('d-poster-btn').addEventListener('click', () =>
+      document.getElementById('d-poster-file').click());
+    document.getElementById('d-poster-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      const dataUrl = await this.pickAndCompress(file);
+      if (!dataUrl) return;
+      s.poster = dataUrl;
+      const img = document.getElementById('d-poster-img');
+      const ph = document.getElementById('d-poster-ph');
+      img.src = dataUrl;
+      img.style.display = '';
+      ph.style.display = 'none';
+      save(); syncShow();
+      toast('照片已更新');
+    });
 
     // 狀態
     document.querySelectorAll('#d-status button').forEach(btn =>
