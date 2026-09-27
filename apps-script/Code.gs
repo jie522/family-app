@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 15; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 16; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '開始追劇日期', '更新時間'];
@@ -25,15 +25,19 @@ var REPORT_HEADERS = ['代號', '日期', '標題', '內容', '更新時間'];
 var APPLIANCE_TAB = '家電清單';
 // 第一欄是 App 自動產生的內部編號(不是拿給人看的),因為「品名」本身不保證唯一
 // (同一家可能買兩台同款同名的電器),用品名比對容易誤蓋到另一筆資料。
-// 每個附件拆成 6 格存(附件1-1~1-6 這種),因為單一儲存格上限 5 萬字元,一張看得清楚
-// 小字的收據/保固卡照片壓縮完還是常常不夠塞——拆格存起來預算才夠留住解析度,App 端
-// (js/sheets.js 的 ATT_CHUNKS/ATT_CHUNK_SIZE)讀取時再拼回去,兩邊格數要保持一致。
-var APPLIANCE_HEADERS = ['編號', '品名', '品牌', '分類', '型號', '購買日期', '價格', '保固期間',
-                         '採購地點', '參考網址', '照片',
-                         '附件1-1', '附件1-2', '附件1-3', '附件1-4', '附件1-5', '附件1-6',
-                         '附件2-1', '附件2-2', '附件2-3', '附件2-4', '附件2-5', '附件2-6',
-                         '附件3-1', '附件3-2', '附件3-3', '附件3-4', '附件3-5', '附件3-6',
-                         '備註', '更新時間'];
+// 每個附件拆成 APPLIANCE_ATT_CHUNKS 格存(附件1-1~1-10 這種),因為單一儲存格上限
+// 5 萬字元,一張看得清楚小字的收據/保固卡照片壓縮完還是常常不夠塞——拆格存起來預算
+// 才夠留住解析度。這個數字要跟 App 端(js/sheets.js 的 ATT_CHUNKS)保持一致,
+// 表頭跟寫入邏輯都用迴圈產生,以後只要改這一個數字,不用手動改一堆欄位字串。
+var APPLIANCE_ATT_CHUNKS = 10;
+var APPLIANCE_HEADERS = (function () {
+  var headers = ['編號', '品名', '品牌', '分類', '型號', '購買日期', '價格', '保固期間', '採購地點', '參考網址', '照片'];
+  for (var n = 1; n <= 3; n++) {
+    for (var p = 1; p <= APPLIANCE_ATT_CHUNKS; p++) headers.push('附件' + n + '-' + p);
+  }
+  headers.push('備註', '更新時間');
+  return headers;
+})();
 
 function logSheet() {
   return SpreadsheetApp.getActiveSpreadsheet().getSheets()[0]; // 第一個分頁:日期,劇名,平台,備註
@@ -229,13 +233,14 @@ function deleteStock(d) {
 
 /* ---------- 家電清單(家庭採購電器登錄) ---------- */
 function applianceRowValues(d) {
-  return [d.id || '', d.name || '', d.brand || '', d.category || '', d.model || '',
-          d.purchaseDate || '', d.price || 0, d.warranty || '', d.place || '', d.url || '',
-          d.photo || '',
-          d.att1_1 || '', d.att1_2 || '', d.att1_3 || '', d.att1_4 || '', d.att1_5 || '', d.att1_6 || '',
-          d.att2_1 || '', d.att2_2 || '', d.att2_3 || '', d.att2_4 || '', d.att2_5 || '', d.att2_6 || '',
-          d.att3_1 || '', d.att3_2 || '', d.att3_3 || '', d.att3_4 || '', d.att3_5 || '', d.att3_6 || '',
-          d.notes || '', new Date()];
+  var row = [d.id || '', d.name || '', d.brand || '', d.category || '', d.model || '',
+             d.purchaseDate || '', d.price || 0, d.warranty || '', d.place || '', d.url || '',
+             d.photo || ''];
+  for (var n = 1; n <= 3; n++) {
+    for (var p = 1; p <= APPLIANCE_ATT_CHUNKS; p++) row.push(d['att' + n + '_' + p] || '');
+  }
+  row.push(d.notes || '', new Date());
+  return row;
 }
 
 function upsertAppliance(d) {

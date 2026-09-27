@@ -201,6 +201,25 @@ const Appliances = {
       : `<div class="attachment-thumb placeholder">📎</div>`;
   },
 
+  /* 附件實際壓成多大——直接量給使用者看,不用再憑感覺猜「是不是還是很模糊」 */
+  attachmentInfo(dataUrl) {
+    if (!dataUrl) return Promise.resolve('');
+    const kb = Math.round(dataUrl.length * 0.75 / 1024);
+    return new Promise(resolve => {
+      const im = new Image();
+      im.onload = () => resolve(`${im.naturalWidth}×${im.naturalHeight}·約${kb}KB`);
+      im.onerror = () => resolve(`約${kb}KB`);
+      im.src = dataUrl;
+    });
+  },
+
+  /* 讓 textarea 自動長高到能看見完整內容,不用手動拉、也不會把內容藏在捲軸裡看不到 */
+  autoGrowTextarea(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = (el.scrollHeight + 2) + 'px';
+  },
+
   /* ---------- 新增 ---------- */
   openAdd() {
     Modal.open(`
@@ -237,6 +256,8 @@ const Appliances = {
       <button class="btn primary block" id="a-add">加入清單</button>
     `);
 
+    document.getElementById('a-notes').addEventListener('input', e => this.autoGrowTextarea(e.target));
+
     let uploadedPhoto = '';
     document.getElementById('a-photo-upload').addEventListener('click', () =>
       document.getElementById('a-photo-file').click());
@@ -272,7 +293,9 @@ const Appliances = {
         uploadedAttachments[i] = dataUrl;
         const row = attBox.children[i];
         row.querySelector('.attachment-thumb').outerHTML = this.attachmentThumb(dataUrl);
-        document.getElementById('a-att-name-' + i).textContent = label + '(已上傳)';
+        const nameEl = document.getElementById('a-att-name-' + i);
+        nameEl.textContent = label + '(已上傳)';
+        this.attachmentInfo(dataUrl).then(info => { if (info) nameEl.textContent += ' · ' + info; });
       });
     });
 
@@ -377,6 +400,7 @@ const Appliances = {
       box.innerHTML = wstat ? `<span class="chip ${wstat.cls}">${esc(wstat.label)}</span>` : '';
     };
     renderWarrantyStatus();
+    this.autoGrowTextarea(document.getElementById('d-notes')); // 一打開就長到能顯示既有備註全文,不用捲動
 
     // 照片(點縮圖放大看,點右下角相機圖示才是換照片)
     document.getElementById('d-photo-img').addEventListener('click', () => this.viewImage(a.photo));
@@ -438,6 +462,7 @@ const Appliances = {
     });
     document.getElementById('d-notes').addEventListener('input', e => {
       a.notes = e.target.value;
+      this.autoGrowTextarea(e.target);
       this.saveList(list); syncAppliance(1200);
     });
 
@@ -447,7 +472,7 @@ const Appliances = {
       attBox.innerHTML = this.ATT_LABELS.map((label, i) => `
         <div class="attachment-item">
           ${this.attachmentThumb(a.attachments[i])}
-          <span class="attachment-name">${esc(label)}${a.attachments[i] ? '' : '(未上傳)'}</span>
+          <span class="attachment-name" id="d-att-name-${i}">${esc(label)}${a.attachments[i] ? '' : '(未上傳)'}</span>
           <div class="attachment-actions">
             ${a.attachments[i] ? `<button type="button" data-view="${i}" title="查看">👁</button>` : ''}
             <button type="button" data-up="${i}" title="上傳/替換">📷</button>
@@ -455,6 +480,14 @@ const Appliances = {
           </div>
           <input type="file" id="d-att-file-${i}" accept="image/*" hidden>
         </div>`).join('');
+      // 實際壓縮結果(解析度、大約多少 KB)直接標在名稱後面,不用再憑感覺猜清不清楚
+      a.attachments.forEach((val, i) => {
+        if (!val) return;
+        this.attachmentInfo(val).then(info => {
+          const el = document.getElementById('d-att-name-' + i);
+          if (el && info) el.textContent = this.ATT_LABELS[i] + ' · ' + info;
+        });
+      });
       attBox.querySelectorAll('[data-view]').forEach(btn =>
         btn.addEventListener('click', () => this.viewImage(a.attachments[+btn.dataset.view])));
       attBox.querySelectorAll('[data-up]').forEach(btn =>
