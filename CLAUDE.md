@@ -18,7 +18,8 @@
 ### App 前端規範
 
 - **字體**:全站文字統一用 **Noto Sans TC(思源黑體)**,透過 Google Fonts 載入(見 [index.html](index.html) 的 `<link>`),`css/style.css` 的 `body { font-family }` 以它為第一順位,後面接系統字體當備援。之後新增頁面或元件不要另外指定字體。
-- **快取破壞(cache-busting)**:`index.html` 引用 `css/style.css`、`js/*.js` 都帶了 `?v=YYYYMMDD` 版本參數。**每次 push 有改到 CSS 或 JS 檔案時,一併把 `index.html` 裡所有 `?v=` 參數更新成當天日期**,否則家人手機瀏覽器可能因為快取舊檔案,看不到最新樣式或功能(遇過的實際問題:改了股票標籤樣式、加了新股票的標籤對照,push 後手機端沒更新)。
+- **快取破壞(cache-busting)**:`index.html` 引用 `css/style.css`、`js/*.js` 都帶了 `?v=YYYYMMDD`(同一天多次修改時加字母後綴,如 `20260927g`)版本參數。**每次 push 有改到 CSS 或 JS 檔案時,一併把 `index.html` 裡所有 `?v=` 參數更新成當天日期**,否則家人手機瀏覽器可能因為快取舊檔案,看不到最新樣式或功能(遇過的實際問題:改了股票標籤樣式、加了新股票的標籤對照,push 後手機端沒更新)。
+  - **`version.txt` + 自動重整**:GitHub Pages 對 `index.html` 本身還是會套 CDN/瀏覽器快取(約 10 分鐘),光改 `?v=` 沒用——使用者在部署後 10 分鐘內打開,常常會抓到還沒更新的舊版 `index.html`(裡面的 `?v=` 還是舊的),看起來像「剛講的修正沒生效」。`index.html` 開頭有一段 inline script,會用 `cache:'no-store'` 去抓一定不快取的 `version.txt`,跟自己 inline 寫死的版本號比對,發現舊了就自動 `location.reload()` 一次。**每次更新 `?v=` 時,`version.txt` 的內容和 `index.html` 那段 script 裡的 `CURRENT_V` 常數,三個地方要改成同一個版本字串**,漏改任何一個都會讓這個自動偵測機制失效或誤觸發。
 
 ### 每檔股票的固定配備(新增股票時必備,四樣缺一不可)
 

@@ -7,6 +7,27 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<script>
+/* GitHub Pages 對 index.html 本身還是會套 ~10 分鐘的 CDN/瀏覽器快取(上面幾個
+ * meta 標籤攔不住,那只影響瀏覽器自己的判斷,不影響 CDN 或中間層快取)。這裡另外
+ * 抓一個一定不快取的 version.txt 跟這支 index.html 內建的版本號比對,發現舊了就
+ * 自動重新整理一次——不然家人手機在部署後 10 分鐘內打開,常常會卡在舊版本,
+ * 看起來像「剛剛講的修正沒生效」,其實只是快取還沒過期。
+ */
+(function () {
+  var CURRENT_V = '20260927g'; // 每次 index.html 的 ?v= 更新時,這裡跟 version.txt 都要跟著改
+  fetch('version.txt?_=' + Date.now(), { cache: 'no-store' })
+    .then(function (r) { return r.text(); })
+    .then(function (v) {
+      v = v.trim();
+      if (v && v !== CURRENT_V && !sessionStorage.getItem('reloaded_' + v)) {
+        sessionStorage.setItem('reloaded_' + v, '1');
+        location.reload();
+      }
+    })
+    .catch(function () {}); // 抓不到就算了,不影響正常開啟
+})();
+</script>
 <title>FAMIAP</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
