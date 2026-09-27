@@ -291,7 +291,7 @@ const Appliances = {
       document.getElementById('a-att-file-' + i).addEventListener('change', async e => {
         const file = e.target.files[0];
         e.target.value = '';
-        const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS, { grayscale: true, limit: this.docLimit(), hardCap: this.docHardCap() });
+        const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS, { limit: this.docLimit(), hardCap: this.docHardCap() });
         if (!dataUrl) return;
         uploadedAttachments[i] = dataUrl;
         const row = attBox.children[i];
@@ -505,7 +505,7 @@ const Appliances = {
         document.getElementById('d-att-file-' + i).addEventListener('change', async e => {
           const file = e.target.files[0];
           e.target.value = '';
-          const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS, { grayscale: true, limit: this.docLimit(), hardCap: this.docHardCap() });
+          const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS, { limit: this.docLimit(), hardCap: this.docHardCap() });
           if (!dataUrl) return;
           a.attachments[i] = dataUrl;
           save(); syncAppliance();
