@@ -168,7 +168,6 @@ const Appliances = {
         <div class="appliance-row-body">
           <div class="appliance-row-title">${esc(a.name)}</div>
           ${sub ? `<div class="appliance-row-sub">${sub}</div>` : ''}
-          ${a.notes ? `<div class="appliance-row-notes">📝 ${esc(a.notes)}</div>` : ''}
         </div>
         <div class="appliance-row-right">
           ${a.price ? `<div class="appliance-row-price">${esc(this.fmtPrice(a.price))}</div>` : ''}
