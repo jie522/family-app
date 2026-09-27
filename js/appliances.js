@@ -10,7 +10,8 @@ const Appliances = {
   // 拆成好幾格存(見 Sheets.ATT_CHUNKS/ATT_CHUNK_SIZE),預算是單一儲存格的好幾倍,才有辦法
   // 留住足夠解析度。家電照片本身只是列表縮圖,不用放大看細節,維持單一儲存格就好。
   PHOTO_ATTEMPTS: [[600, 0.8], [600, 0.6], [450, 0.55], [350, 0.45], [280, 0.4]],
-  DOC_ATTEMPTS: [[2000, 0.75], [1800, 0.7], [1600, 0.65], [1400, 0.6], [1200, 0.55], [1000, 0.5], [850, 0.45], [700, 0.4]],
+  DOC_ATTEMPTS: [[2600, 0.75], [2400, 0.72], [2200, 0.7], [2000, 0.68], [1800, 0.65], [1600, 0.62],
+                 [1400, 0.6], [1200, 0.55], [1000, 0.5], [850, 0.45], [700, 0.4]],
 
   /* 附件的壓縮目標/硬上限——跟 Sheets.ATT_CHUNKS/ATT_CHUNK_SIZE 保持一致,單一來源避免兩邊數字兜不起來 */
   docLimit() { return Math.round(Sheets.ATT_CHUNKS * Sheets.ATT_CHUNK_SIZE * 0.85); },
@@ -95,18 +96,16 @@ const Appliances = {
     }
   },
 
-  /* 在新視窗放大檢視(附件、家電照片共用)——帶正確的 viewport,手機上才能正常雙指縮放看細節 */
+  /* 放大檢視(附件、家電照片共用)——原本用 window.open() 開新視窗,結果手機上(尤其
+   * 加到主畫面後)那個新視窗/新分頁常常沒有明顯的關閉按鈕,使用者會卡住出不來。
+   * 改用 App 現成的 Modal(跟其他彈窗共用同一套✕按鈕、點背景關閉的邏輯),保證關得掉。
+   * 雙指縮放看細節還是能用——viewport 設定本來就沒有停用縮放。 */
   viewImage(dataUrl) {
     if (!dataUrl) return;
-    const w = window.open();
-    if (!w) { toast('瀏覽器擋住了新視窗,允許彈出視窗後再試一次'); return; }
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>檢視照片</title>
-      <style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh}
-      img{max-width:100%;height:auto;display:block}</style></head>
-      <body><img src="${dataUrl}"></body></html>`);
-    w.document.close();
+    Modal.open(`
+      <button class="modal-close" data-close>✕</button>
+      <img src="${dataUrl}" alt="" style="width:100%;border-radius:10px;display:block;margin-top:8px">
+    `);
   },
 
   /* ---------- 保固到期試算(輸入是自由文字,能辨識常見格式就順便算到期日) ---------- */
@@ -169,7 +168,7 @@ const Appliances = {
         <div class="appliance-row-body">
           <div class="appliance-row-title">${esc(a.name)}</div>
           ${sub ? `<div class="appliance-row-sub">${sub}</div>` : ''}
-          ${a.notes ? `<div class="appliance-row-sub">📝 ${esc(a.notes)}</div>` : ''}
+          ${a.notes ? `<div class="appliance-row-notes">📝 ${esc(a.notes)}</div>` : ''}
         </div>
         <div class="appliance-row-right">
           ${a.price ? `<div class="appliance-row-price">${esc(this.fmtPrice(a.price))}</div>` : ''}

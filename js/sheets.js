@@ -16,7 +16,7 @@ const Sheets = {
   // 附件(收據/保固卡等文件照)常常壓縮完還是超過 Sheet 單一儲存格 5 萬字元上限,
   // 不夠塞就沒辦法看清楚小字——所以每個附件拆成好幾格存,合起來的預算才夠留住解析度。
   // Apps Script 那邊(apps-script/Code.gs)的 APPLIANCE_HEADERS 要跟這兩個數字對齊。
-  ATT_CHUNKS: 3,
+  ATT_CHUNKS: 6,
   ATT_CHUNK_SIZE: 49000, // 留一點餘裕給 Sheets 真正的 5 萬字元硬限制
 
   splitAttachment(str) {

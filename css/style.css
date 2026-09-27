@@ -179,6 +179,10 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
   font-size: 12px; color: var(--text2); margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.appliance-row-notes {
+  font-size: 12px; color: var(--text2); margin-top: 2px; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .appliance-row-right { flex-shrink: 0; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .appliance-row-price { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .detail-photo-wrap { position: relative; width: 110px; flex-shrink: 0; }
