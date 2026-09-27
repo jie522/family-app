@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 12; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 13; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '開始追劇日期', '更新時間'];
@@ -22,6 +22,11 @@ var STOCK_TAB = '股票追蹤';
 var STOCK_HEADERS = ['代號', '名稱', '筆記', '更新時間'];
 var REPORT_TAB = 'FAMAILY APP - 股票'; // 股票分析報告鏡像(reports/ 資料夾內容的雲端備份)
 var REPORT_HEADERS = ['代號', '日期', '標題', '內容', '更新時間'];
+var APPLIANCE_TAB = '家電清單';
+// 第一欄是 App 自動產生的內部編號(不是拿給人看的),因為「品名」本身不保證唯一
+// (同一家可能買兩台同款同名的電器),用品名比對容易誤蓋到另一筆資料。
+var APPLIANCE_HEADERS = ['編號', '品名', '品牌', '分類', '型號', '購買日期', '價格', '保固期間',
+                         '採購地點', '參考網址', '照片', '附件1', '附件2', '附件3', '備註', '更新時間'];
 
 function logSheet() {
   return SpreadsheetApp.getActiveSpreadsheet().getSheets()[0]; // 第一個分頁:日期,劇名,平台,備註
@@ -48,6 +53,18 @@ function stockSheet() {
   }
   // 代號欄強制文字格式,避免 0050 這類 ETF 代號被自動轉成數字 50
   sh.getRange('A:A').setNumberFormat('@');
+  return sh;
+}
+
+function applianceSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(APPLIANCE_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(APPLIANCE_TAB);
+    sh.appendRow(APPLIANCE_HEADERS);
+    sh.setFrozenRows(1);
+  }
+  sh.getRange('A:A').setNumberFormat('@'); // 編號欄強制文字格式
   return sh;
 }
 
@@ -93,6 +110,8 @@ function handle(action, d) {
     case 'deleteShow': deleteShow(d);  return { ok: true };
     case 'upsertStock': upsertStock(d); return { ok: true };
     case 'deleteStock': deleteStock(d); return { ok: true };
+    case 'upsertAppliance': upsertAppliance(d); return { ok: true };
+    case 'deleteAppliance': deleteAppliance(d); return { ok: true };
     case 'tmdbSearch': return tmdbSearch(d);
     case 'quotes':     return quotes(d);
     case 'upsertReport': upsertReport(d); return { ok: true };
@@ -198,6 +217,34 @@ function deleteStock(d) {
   var rows = sh.getDataRange().getValues();
   for (var i = rows.length - 1; i >= 1; i--) {
     if (String(rows[i][0]).trim() === code) sh.deleteRow(i + 1);
+  }
+}
+
+/* ---------- 家電清單(家庭採購電器登錄) ---------- */
+function applianceRowValues(d) {
+  return [d.id || '', d.name || '', d.brand || '', d.category || '', d.model || '',
+          d.purchaseDate || '', d.price || 0, d.warranty || '', d.place || '', d.url || '',
+          d.photo || '', d.att1 || '', d.att2 || '', d.att3 || '', d.notes || '', new Date()];
+}
+
+function upsertAppliance(d) {
+  var sh = applianceSheet();
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === String(d.id).trim()) {
+      sh.getRange(i + 1, 1, 1, APPLIANCE_HEADERS.length).setValues([applianceRowValues(d)]);
+      return;
+    }
+  }
+  sh.appendRow(applianceRowValues(d));
+}
+
+function deleteAppliance(d) {
+  var id = String(d.id).trim();
+  var sh = applianceSheet();
+  var rows = sh.getDataRange().getValues();
+  for (var i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][0]).trim() === id) sh.deleteRow(i + 1);
   }
 }
 
@@ -390,4 +437,5 @@ function bulk(d) {
     }
   });
   (d.stocks || []).forEach(function (s) { upsertStock(s); });
+  (d.appliances || []).forEach(function (a) { upsertAppliance(a); });
 }

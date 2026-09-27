@@ -4,6 +4,7 @@
 
 - 📺 **追劇清單** — 記錄想看 / 追劇中 / 看完的劇,自動抓海報,寫下什麼時候看了什麼
 - 📈 **台股追蹤** — 追蹤股票的收盤價、漲跌、本益比、殖利率,寫分析筆記
+- 🔌 **家電清單** — 登錄家裡買的電器:品牌、型號、價格、保固期間(自動算到期日)、照片、收據/保固卡附件
 
 純靜態網頁,不需要伺服器,放在 GitHub Pages 上完全免費。
 
@@ -33,10 +34,11 @@
 
 ## 資料存哪裡?
 
-啟用「Google Sheet 同步」後,**追劇清單和股票追蹤清單都存在雲端**的同一份 [FAMIAP Google Sheet](https://docs.google.com/spreadsheets/d/1rS_foFkuoFXVdK_9QxEFUFO7cPwwbX4Y8d7HY7yvIhI/edit),不再只存在單一手機裡:
+啟用「Google Sheet 同步」後,**追劇清單、股票追蹤清單和家電清單都存在雲端**的同一份 [FAMIAP Google Sheet](https://docs.google.com/spreadsheets/d/1rS_foFkuoFXVdK_9QxEFUFO7cPwwbX4Y8d7HY7yvIhI/edit),不再只存在單一手機裡:
 
 - **追劇清單**:App 的新增、觀看紀錄、評分都會自動寫進 Sheet;直接在 Sheet 第一個分頁加一列(日期/劇名/平台/備註)App 也讀得到。
 - **股票追蹤清單**:存在「股票追蹤」分頁(代號/名稱/筆記),App 裡加入、取消追蹤、寫筆記都會同步。
+- **家電清單**:存在「家電清單」分頁,照片和附件(收據、保固卡等)直接壓成小圖存進儲存格,不用另外接圖床。
 - 台股的**報價**資料(收盤價、漲跌…)本來就已經是雲端資料(GitHub Actions 每交易日更新 `data/stocks.json`),跟「追蹤清單」是兩回事——追蹤清單只是「你想關注哪幾檔」的名單。
 - **盤中即時報價**:啟用 Apps Script 同步後,股票頁會自動透過 Apps Script 代抓 Yahoo 股市的盤中報價(可能延遲數分鐘),也可按「🔄 更新」手動刷新;沒啟用或抓不到時自動顯示每日收盤資料。
 

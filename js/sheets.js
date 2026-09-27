@@ -7,8 +7,10 @@ const Sheets = {
   LOG_GID: '0',          // 第一個分頁:日期,劇名,平台,備註
   SHOW_TAB: '劇集庫',     // App 自動建立的分頁:劇的狀態/評分/海報…
   STOCK_TAB: '股票追蹤',  // App 自動建立的分頁:代號/名稱/筆記
+  APPLIANCE_TAB: '家電清單', // App 自動建立的分頁:家電採購登錄
   SHOW_HEADER0: '劇名',   // 用來核對真的抓到「劇集庫」分頁(見 fetchNamedTab)
   STOCK_HEADER0: '代號',  // 用來核對真的抓到「股票追蹤」分頁
+  APPLIANCE_HEADER0: '編號', // 用來核對真的抓到「家電清單」分頁
   STATUS_ZH: { want: '想看', watching: '追劇中', done: '看完' },
 
   settings() { return Store.load('settings', {}); },
@@ -86,6 +88,10 @@ const Sheets = {
     let stockRows = null;
     try { stockRows = await this.fetchNamedTab(this.STOCK_TAB, this.STOCK_HEADER0); }
     catch { stockRows = null; }
+    // 家電清單分頁(可能還沒建立;null 代表分頁不存在,保留手機上原本的清單)
+    let applianceRows = null;
+    try { applianceRows = await this.fetchNamedTab(this.APPLIANCE_TAB, this.APPLIANCE_HEADER0); }
+    catch { applianceRows = null; }
 
     const shows = new Map();
     // 劇集庫:劇名,平台,狀態,評分,筆記,海報,年份,類型,簡介,TMDBID,開始追劇日期
@@ -154,10 +160,32 @@ const Sheets = {
       Store.save('stocks', stocks);
     }
 
+    // 家電清單:編號,品名,品牌,分類,型號,購買日期,價格,保固期間,採購地點,參考網址,照片,附件1,附件2,附件3,備註
+    let appliances = null;
+    if (applianceRows) {
+      appliances = applianceRows.slice(1)
+        .map(([id, name, brand, category, model, purchaseDate, price, warranty, place, url, photo, att1, att2, att3, notes], i) => ({
+          id: (id || '').trim() || ('a' + i),
+          name: (name || '').trim(),
+          brand: brand || '', category: category || '', model: model || '',
+          purchaseDate: purchaseDate ? this.normDate(purchaseDate) : '',
+          price: price ? +price : 0,
+          warranty: warranty || '', place: place || '', url: url || '',
+          photo: photo || '', attachments: [att1 || '', att2 || '', att3 || ''],
+          notes: notes || '', addedAt: i + 1,
+        }))
+        .filter(a => a.name);
+      Store.save('appliances', appliances);
+    }
+
     const s = this.settings();
     s.lastSync = new Date().toISOString();
     Store.save('settings', s);
-    return { shows: list, stocks: stocks || Store.load('stocks', []) };
+    return {
+      shows: list,
+      stocks: stocks || Store.load('stocks', []),
+      appliances: appliances || Store.load('appliances', []),
+    };
   },
 
   /* ---------- 寫入 / 呼叫 ---------- */
@@ -237,6 +265,17 @@ const Sheets = {
     return { code: w.code, name: w.name || '', notes: w.notes || '' };
   },
 
+  applianceToRow(a) {
+    const att = a.attachments || ['', '', ''];
+    return {
+      id: a.id, name: a.name || '', brand: a.brand || '', category: a.category || '',
+      model: a.model || '', purchaseDate: a.purchaseDate || '', price: a.price || 0,
+      warranty: a.warranty || '', place: a.place || '', url: a.url || '',
+      photo: a.photo || '', att1: att[0] || '', att2: att[1] || '', att3: att[2] || '',
+      notes: a.notes || '',
+    };
+  },
+
   /* 把 reports/<代號>/<日期>.md 的內容鏡像一份到 Google Sheet(分頁「FAMAILY APP - 股票」) */
   async pushReport({ code, date, title, content }) {
     return this.push('upsertReport', { code, date, title, content });
@@ -257,6 +296,7 @@ const Sheets = {
       }
     }
     const stocks = Store.load('stocks', []).map(w => this.stockToRow(w));
-    return this.push('bulk', { shows, logs, stocks });
+    const appliances = Store.load('appliances', []).map(a => this.applianceToRow(a));
+    return this.push('bulk', { shows, logs, stocks, appliances });
   },
 };

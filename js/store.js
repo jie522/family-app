@@ -1,6 +1,6 @@
 /* 資料儲存:localStorage 包裝 + 匯出匯入 */
 const Store = {
-  KEYS: { shows: 'fam.shows', stocks: 'fam.stocks', settings: 'fam.settings', pendingSync: 'fam.pendingSync' },
+  KEYS: { shows: 'fam.shows', stocks: 'fam.stocks', appliances: 'fam.appliances', settings: 'fam.settings', pendingSync: 'fam.pendingSync' },
 
   load(key, fallback) {
     try {
@@ -20,6 +20,7 @@ const Store = {
       exportedAt: new Date().toISOString(),
       shows: this.load('shows', []),
       stocks: this.load('stocks', []),
+      appliances: this.load('appliances', []),
       settings: this.load('settings', {}),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -39,6 +40,7 @@ const Store = {
         if (!data || (data.app !== 'FAMIAP' && data.app !== '家庭小站')) throw new Error('格式不對');
         if (Array.isArray(data.shows)) this.save('shows', data.shows);
         if (Array.isArray(data.stocks)) this.save('stocks', data.stocks);
+        if (Array.isArray(data.appliances)) this.save('appliances', data.appliances);
         if (data.settings) this.save('settings', data.settings);
         done(true);
       } catch {

@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20260825b">
+<link rel="stylesheet" href="css/style.css?v=20260927b">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🏠</text></svg>">
 </head>
 <body>
@@ -48,6 +48,15 @@
     </div>
   </section>
 
+  <!-- ============ 家電 ============ -->
+  <section id="page-appliances" class="page">
+    <div id="appliance-grid" class="show-grid"></div>
+    <div id="appliance-empty" class="empty hidden">
+      <div class="empty-icon">🔌</div>
+      <p>還沒有登錄家電喔!<br>按右上角「＋」新增第一項</p>
+    </div>
+  </section>
+
   <!-- ============ 知識庫 ============ -->
   <section id="page-knowledge" class="page">
     <p class="hint" style="margin:2px 2px 12px">整理台股題材背後的產業知識與投資框架,公開內容、非投資建議。</p>
@@ -59,7 +68,7 @@
     <div class="card">
       <h2>Google Sheet 同步</h2>
       <p class="hint">全家共用一份 <a href="https://docs.google.com/spreadsheets/d/1rS_foFkuoFXVdK_9QxEFUFO7cPwwbX4Y8d7HY7yvIhI/edit" target="_blank">FAMIAP Google Sheet</a>。
-      啟用後,追劇清單和股票追蹤清單都會自動存進 Sheet(不再只存在這支手機裡),App 裡的新增、記錄、評分、筆記都會即時寫回,家人打開 App 也會看到同一份清單。<br>
+      啟用後,追劇清單、股票追蹤清單和家電清單都會自動存進 Sheet(不再只存在這支手機裡),App 裡的新增、記錄、評分、筆記都會即時寫回,家人打開 App 也會看到同一份清單。<br>
       啟用方式:照 <b>apps-script/Code.gs</b> 檔案開頭的 5 步驟部署,把網址貼到下面。</p>
       <input type="url" id="script-url" placeholder="貼上 Apps Script 網頁應用程式網址 (https://script.google.com/…/exec)" autocomplete="off">
       <div class="btn-row">
@@ -99,6 +108,7 @@
 <nav class="tab-bar">
   <button class="tab active" data-page="stocks"><span class="tab-icon">📈</span>股票</button>
   <button class="tab" data-page="shows"><span class="tab-icon">📺</span>追劇</button>
+  <button class="tab" data-page="appliances"><span class="tab-icon">🔌</span>家電</button>
   <button class="tab" data-page="knowledge"><span class="tab-icon">📚</span>知識庫</button>
   <button class="tab" data-page="settings"><span class="tab-icon">⚙️</span>設定</button>
 </nav>
@@ -108,12 +118,13 @@
   <div id="modal" class="modal"></div>
 </div>
 
-<script src="js/store.js?v=20260825b"></script>
-<script src="js/sheets.js?v=20260825b"></script>
-<script src="js/tmdb.js?v=20260825b"></script>
-<script src="js/shows.js?v=20260825b"></script>
-<script src="js/stocks.js?v=20260825b"></script>
-<script src="js/knowledge.js?v=20260825b"></script>
-<script src="js/app.js?v=20260825b"></script>
+<script src="js/store.js?v=20260927b"></script>
+<script src="js/sheets.js?v=20260927b"></script>
+<script src="js/tmdb.js?v=20260927b"></script>
+<script src="js/shows.js?v=20260927b"></script>
+<script src="js/appliances.js?v=20260927b"></script>
+<script src="js/stocks.js?v=20260927b"></script>
+<script src="js/knowledge.js?v=20260927b"></script>
+<script src="js/app.js?v=20260927b"></script>
 </body>
 </html>

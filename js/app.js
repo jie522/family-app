@@ -22,6 +22,7 @@ document.getElementById('modal-backdrop').addEventListener('click', e => {
 const PAGES = {
   stocks: { title: '台股追蹤', add: () => Stocks.openAdd() },
   shows: { title: '追劇清單', add: () => Shows.openAdd() },
+  appliances: { title: '家電清單', add: () => Appliances.openAdd() },
   knowledge: { title: '知識庫', add: null },
   settings: { title: '設定', add: null },
 };
@@ -103,6 +104,7 @@ async function pullAndRender() {
     await Sheets.pull();
     Shows.render();
     Stocks.render();
+    Appliances.render();
     refreshSyncStatus();
     return true;
   } catch {
@@ -136,8 +138,9 @@ document.getElementById('save-script').addEventListener('click', async () => {
   }
   const localShows = Store.load('shows', []);
   const localStocks = Store.load('stocks', []);
-  const total = localShows.length + localStocks.length;
-  if (total && confirm(`連線成功!要把這支手機現有的 ${localShows.length} 部劇 + ${localStocks.length} 檔股票上傳到 Google Sheet 嗎?\n(家人的手機第一次啟用時選「取消」就好)`)) {
+  const localAppliances = Store.load('appliances', []);
+  const total = localShows.length + localStocks.length + localAppliances.length;
+  if (total && confirm(`連線成功!要把這支手機現有的 ${localShows.length} 部劇 + ${localStocks.length} 檔股票 + ${localAppliances.length} 項家電上傳到 Google Sheet 嗎?\n(家人的手機第一次啟用時選「取消」就好)`)) {
     syncStatus.textContent = '上傳中…';
     await Sheets.bulkUpload();
   }
@@ -163,6 +166,7 @@ document.getElementById('import-file').addEventListener('change', e => {
     if (ok) {
       Shows.render();
       Stocks.render();
+      Appliances.render();
       refreshTmdbStatus();
       toast('匯入成功!');
     } else {
@@ -176,6 +180,7 @@ document.getElementById('import-file').addEventListener('change', e => {
 refreshTmdbStatus();
 refreshSyncStatus();
 Shows.render();          // 先用本機快取畫面
+Appliances.render();
 Stocks.init();
 switchPage('stocks');
 if (Sheets.enabled()) pullAndRender();   // 再從 Google Sheet 抓最新資料
