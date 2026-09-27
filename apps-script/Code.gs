@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 13; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 14; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '開始追劇日期', '更新時間'];
@@ -25,8 +25,15 @@ var REPORT_HEADERS = ['代號', '日期', '標題', '內容', '更新時間'];
 var APPLIANCE_TAB = '家電清單';
 // 第一欄是 App 自動產生的內部編號(不是拿給人看的),因為「品名」本身不保證唯一
 // (同一家可能買兩台同款同名的電器),用品名比對容易誤蓋到另一筆資料。
+// 每個附件拆成 3 格存(附件1-1~1-3 這種),因為單一儲存格上限 5 萬字元,一張收據/保固卡
+// 壓縮完常常不夠塞——拆格存起來預算才夠留住解析度,App 端(js/sheets.js 的 ATT_CHUNKS/
+// ATT_CHUNK_SIZE)讀取時再拼回去,兩邊格數要保持一致。
 var APPLIANCE_HEADERS = ['編號', '品名', '品牌', '分類', '型號', '購買日期', '價格', '保固期間',
-                         '採購地點', '參考網址', '照片', '附件1', '附件2', '附件3', '備註', '更新時間'];
+                         '採購地點', '參考網址', '照片',
+                         '附件1-1', '附件1-2', '附件1-3',
+                         '附件2-1', '附件2-2', '附件2-3',
+                         '附件3-1', '附件3-2', '附件3-3',
+                         '備註', '更新時間'];
 
 function logSheet() {
   return SpreadsheetApp.getActiveSpreadsheet().getSheets()[0]; // 第一個分頁:日期,劇名,平台,備註
@@ -224,7 +231,11 @@ function deleteStock(d) {
 function applianceRowValues(d) {
   return [d.id || '', d.name || '', d.brand || '', d.category || '', d.model || '',
           d.purchaseDate || '', d.price || 0, d.warranty || '', d.place || '', d.url || '',
-          d.photo || '', d.att1 || '', d.att2 || '', d.att3 || '', d.notes || '', new Date()];
+          d.photo || '',
+          d.att1_1 || '', d.att1_2 || '', d.att1_3 || '',
+          d.att2_1 || '', d.att2_2 || '', d.att2_3 || '',
+          d.att3_1 || '', d.att3_2 || '', d.att3_3 || '',
+          d.notes || '', new Date()];
 }
 
 function upsertAppliance(d) {

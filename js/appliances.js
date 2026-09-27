@@ -6,9 +6,15 @@ const Appliances = {
   // 家電照片(列表縮圖用,壓小一點就好,保留彩色);附件(收據/保固卡等文件照)通常有
   // 密密麻麻的小字,解析度不夠放大就是一團模糊——所以附件走灰階(去掉色彩資訊換取同樣
   // 位元組預算下能留更高解析度)、解析度優先於畫質(文字清晰度靠像素夠不夠,不是靠色彩準不準)。
+  // Google Sheet 單一儲存格上限是 5 萬字元,一張像樣的文件照壓縮後常常不夠塞——所以附件
+  // 拆成好幾格存(見 Sheets.ATT_CHUNKS/ATT_CHUNK_SIZE),預算是單一儲存格的好幾倍,才有辦法
+  // 留住足夠解析度。家電照片本身只是列表縮圖,不用放大看細節,維持單一儲存格就好。
   PHOTO_ATTEMPTS: [[600, 0.8], [600, 0.6], [450, 0.55], [350, 0.45], [280, 0.4]],
-  DOC_ATTEMPTS: [[1400, 0.6], [1200, 0.55], [1000, 0.5], [850, 0.45], [700, 0.4], [600, 0.35]],
-  DOC_LIMIT: 48000, // Google Sheet 單一儲存格上限 5 萬字元,留一點餘裕
+  DOC_ATTEMPTS: [[2000, 0.75], [1800, 0.7], [1600, 0.65], [1400, 0.6], [1200, 0.55], [1000, 0.5], [850, 0.45], [700, 0.4]],
+
+  /* 附件的壓縮目標/硬上限——跟 Sheets.ATT_CHUNKS/ATT_CHUNK_SIZE 保持一致,單一來源避免兩邊數字兜不起來 */
+  docLimit() { return Math.round(Sheets.ATT_CHUNKS * Sheets.ATT_CHUNK_SIZE * 0.85); },
+  docHardCap() { return Sheets.ATT_CHUNKS * Sheets.ATT_CHUNK_SIZE; },
 
   list() { return Store.load('appliances', []); },
   saveList(list) { Store.save('appliances', list); },
@@ -63,15 +69,16 @@ const Appliances = {
       im.src = dataUrl;
     });
     const limit = opts.limit || 45000;
+    const hardCap = opts.hardCap || this.SHEET_CELL_HARD_CAP;
     let out = '';
     for (const [maxW, q] of attempts) {
       out = this.renderJpeg(img, maxW, q, opts.grayscale);
       if (out.length < limit) return out;
     }
     // 內容特別密(例如密密麻麻的小字+雜訊),連最小的嘗試都還是超過——
-    // 繼續往下壓到保證能塞進 Sheet 儲存格為止,不然這筆資料會整個存不進去
+    // 繼續往下壓到保證能塞進 Sheet 儲存格(們)為止,不然這筆資料會整個存不進去
     for (const [maxW, q] of [[400, 0.25], [280, 0.2], [180, 0.15]]) {
-      if (out.length < this.SHEET_CELL_HARD_CAP) break;
+      if (out.length < hardCap) break;
       out = this.renderJpeg(img, maxW, q, opts.grayscale);
     }
     return out;
@@ -124,15 +131,16 @@ const Appliances = {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   },
 
-  /* 回傳 {label, cls, end} 給卡片/詳情頁顯示的保固狀態小標籤;算不出來就回傳 null(不顯示) */
+  /* 回傳 {label, cls, end} 給列表/詳情頁顯示的保固狀態小標籤(label 已經帶到期日,不用另外拼);
+   * 算不出來就回傳 null(不顯示) */
   warrantyStatus(purchaseDate, warrantyText) {
     const end = this.warrantyEndDate(purchaseDate, warrantyText);
     if (!end) return null;
     if (end === 'lifetime') return { label: '終身保固', cls: 'done', end: null };
     const daysLeft = Math.ceil((new Date(end + 'T00:00:00') - new Date(todayStr() + 'T00:00:00')) / 86400000);
-    if (daysLeft < 0) return { label: '已過保', cls: 'want', end };
-    if (daysLeft <= 30) return { label: `剩 ${daysLeft} 天到期`, cls: 'warn', end };
-    return { label: '保固中', cls: 'done', end };
+    if (daysLeft < 0) return { label: `已過保(${end})`, cls: 'want', end };
+    if (daysLeft <= 30) return { label: `剩 ${daysLeft} 天(${end})`, cls: 'warn', end };
+    return { label: `保固至 ${end}`, cls: 'done', end };
   },
 
   fmtPrice(n) {
@@ -161,7 +169,7 @@ const Appliances = {
         <div class="appliance-row-body">
           <div class="appliance-row-title">${esc(a.name)}</div>
           ${sub ? `<div class="appliance-row-sub">${sub}</div>` : ''}
-          ${a.notes ? `<div class="appliance-row-sub">📝 ${esc(a.notes.length > 30 ? a.notes.slice(0, 30) + '…' : a.notes)}</div>` : ''}
+          ${a.notes ? `<div class="appliance-row-sub">📝 ${esc(a.notes)}</div>` : ''}
         </div>
         <div class="appliance-row-right">
           ${a.price ? `<div class="appliance-row-price">${esc(this.fmtPrice(a.price))}</div>` : ''}
@@ -261,7 +269,7 @@ const Appliances = {
       document.getElementById('a-att-file-' + i).addEventListener('change', async e => {
         const file = e.target.files[0];
         e.target.value = '';
-        const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS, { grayscale: true, limit: this.DOC_LIMIT });
+        const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS, { grayscale: true, limit: this.docLimit(), hardCap: this.docHardCap() });
         if (!dataUrl) return;
         uploadedAttachments[i] = dataUrl;
         const row = attBox.children[i];
@@ -368,9 +376,7 @@ const Appliances = {
     const renderWarrantyStatus = () => {
       const box = document.getElementById('d-warranty-status');
       const wstat = this.warrantyStatus(a.purchaseDate, a.warranty);
-      box.innerHTML = wstat
-        ? `<span class="chip ${wstat.cls}">${esc(wstat.label)}</span>${wstat.end ? ` <span class="hint">(至 ${esc(wstat.end)})</span>` : ''}`
-        : '';
+      box.innerHTML = wstat ? `<span class="chip ${wstat.cls}">${esc(wstat.label)}</span>` : '';
     };
     renderWarrantyStatus();
 
@@ -465,7 +471,7 @@ const Appliances = {
         document.getElementById('d-att-file-' + i).addEventListener('change', async e => {
           const file = e.target.files[0];
           e.target.value = '';
-          const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS, { grayscale: true, limit: this.DOC_LIMIT });
+          const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS, { grayscale: true, limit: this.docLimit(), hardCap: this.docHardCap() });
           if (!dataUrl) return;
           a.attachments[i] = dataUrl;
           save(); syncAppliance();

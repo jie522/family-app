@@ -13,6 +13,23 @@ const Sheets = {
   APPLIANCE_HEADER0: '編號', // 用來核對真的抓到「家電清單」分頁
   STATUS_ZH: { want: '想看', watching: '追劇中', done: '看完' },
 
+  // 附件(收據/保固卡等文件照)常常壓縮完還是超過 Sheet 單一儲存格 5 萬字元上限,
+  // 不夠塞就沒辦法看清楚小字——所以每個附件拆成好幾格存,合起來的預算才夠留住解析度。
+  // Apps Script 那邊(apps-script/Code.gs)的 APPLIANCE_HEADERS 要跟這兩個數字對齊。
+  ATT_CHUNKS: 3,
+  ATT_CHUNK_SIZE: 49000, // 留一點餘裕給 Sheets 真正的 5 萬字元硬限制
+
+  splitAttachment(str) {
+    const s = str || '';
+    const out = [];
+    for (let i = 0; i < this.ATT_CHUNKS; i++) out.push(s.slice(i * this.ATT_CHUNK_SIZE, (i + 1) * this.ATT_CHUNK_SIZE));
+    return out;
+  },
+
+  joinAttachment(parts) {
+    return (parts || []).join('');
+  },
+
   settings() { return Store.load('settings', {}); },
   scriptUrl() { return (this.settings().scriptUrl || '').trim(); },
   enabled() { return !!this.scriptUrl(); },
@@ -160,20 +177,29 @@ const Sheets = {
       Store.save('stocks', stocks);
     }
 
-    // 家電清單:編號,品名,品牌,分類,型號,購買日期,價格,保固期間,採購地點,參考網址,照片,附件1,附件2,附件3,備註
+    // 家電清單:編號,品名,品牌,分類,型號,購買日期,價格,保固期間,採購地點,參考網址,照片,
+    // 附件1-1~1-3,附件2-1~2-3,附件3-1~3-3(每個附件拆 ATT_CHUNKS 格存,見上面的說明),備註
     let appliances = null;
     if (applianceRows) {
       appliances = applianceRows.slice(1)
-        .map(([id, name, brand, category, model, purchaseDate, price, warranty, place, url, photo, att1, att2, att3, notes], i) => ({
-          id: (id || '').trim() || ('a' + i),
-          name: (name || '').trim(),
-          brand: brand || '', category: category || '', model: model || '',
-          purchaseDate: purchaseDate ? this.normDate(purchaseDate) : '',
-          price: price ? +price : 0,
-          warranty: warranty || '', place: place || '', url: url || '',
-          photo: photo || '', attachments: [att1 || '', att2 || '', att3 || ''],
-          notes: notes || '', addedAt: i + 1,
-        }))
+        .map((cols, i) => {
+          const [id, name, brand, category, model, purchaseDate, price, warranty, place, url, photo,
+                 ...rest] = cols;
+          const attCount = this.ATT_CHUNKS;
+          const attachments = [0, 1, 2].map(n =>
+            this.joinAttachment(rest.slice(n * attCount, n * attCount + attCount)));
+          const notes = rest[3 * attCount];
+          return {
+            id: (id || '').trim() || ('a' + i),
+            name: (name || '').trim(),
+            brand: brand || '', category: category || '', model: model || '',
+            purchaseDate: purchaseDate ? this.normDate(purchaseDate) : '',
+            price: price ? +price : 0,
+            warranty: warranty || '', place: place || '', url: url || '',
+            photo: photo || '', attachments,
+            notes: notes || '', addedAt: i + 1,
+          };
+        })
         .filter(a => a.name);
       Store.save('appliances', appliances);
     }
@@ -267,13 +293,16 @@ const Sheets = {
 
   applianceToRow(a) {
     const att = a.attachments || ['', '', ''];
-    return {
+    const row = {
       id: a.id, name: a.name || '', brand: a.brand || '', category: a.category || '',
       model: a.model || '', purchaseDate: a.purchaseDate || '', price: a.price || 0,
       warranty: a.warranty || '', place: a.place || '', url: a.url || '',
-      photo: a.photo || '', att1: att[0] || '', att2: att[1] || '', att3: att[2] || '',
-      notes: a.notes || '',
+      photo: a.photo || '', notes: a.notes || '',
     };
+    att.forEach((val, i) => {
+      this.splitAttachment(val).forEach((chunk, p) => { row[`att${i + 1}_${p + 1}`] = chunk; });
+    });
+    return row;
   },
 
   /* 把 reports/<代號>/<日期>.md 的內容鏡像一份到 Google Sheet(分頁「FAMAILY APP - 股票」) */
