@@ -15,7 +15,7 @@
  * 看起來像「剛剛講的修正沒生效」,其實只是快取還沒過期。
  */
 (function () {
-  var CURRENT_V = '20260927j'; // 每次 index.html 的 ?v= 更新時,這裡跟 version.txt 都要跟著改
+  var CURRENT_V = '20260927k'; // 每次 index.html 的 ?v= 更新時,這裡跟 version.txt 都要跟著改
   fetch('version.txt?_=' + Date.now(), { cache: 'no-store' })
     .then(function (r) { return r.text(); })
     .then(function (v) {
@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20260927j">
+<link rel="stylesheet" href="css/style.css?v=20260927k">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🏠</text></svg>">
 </head>
 <body>
@@ -139,13 +139,13 @@
   <div id="modal" class="modal"></div>
 </div>
 
-<script src="js/store.js?v=20260927j"></script>
-<script src="js/sheets.js?v=20260927j"></script>
-<script src="js/tmdb.js?v=20260927j"></script>
-<script src="js/shows.js?v=20260927j"></script>
-<script src="js/appliances.js?v=20260927j"></script>
-<script src="js/stocks.js?v=20260927j"></script>
-<script src="js/knowledge.js?v=20260927j"></script>
-<script src="js/app.js?v=20260927j"></script>
+<script src="js/store.js?v=20260927k"></script>
+<script src="js/sheets.js?v=20260927k"></script>
+<script src="js/tmdb.js?v=20260927k"></script>
+<script src="js/shows.js?v=20260927k"></script>
+<script src="js/appliances.js?v=20260927k"></script>
+<script src="js/stocks.js?v=20260927k"></script>
+<script src="js/knowledge.js?v=20260927k"></script>
+<script src="js/app.js?v=20260927k"></script>
 </body>
 </html>

@@ -1,8 +1,69 @@
-/* 資料儲存:localStorage 包裝 + 匯出匯入 */
+/* 極簡 IndexedDB 鍵值存取(單一 object store 'kv') */
+const IDB = {
+  _db: null,
+  open() {
+    if (!this._db) {
+      this._db = new Promise((resolve, reject) => {
+        const req = indexedDB.open('famiap', 1);
+        req.onupgradeneeded = () => req.result.createObjectStore('kv');
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    return this._db;
+  },
+  async get(key) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const req = db.transaction('kv').objectStore('kv').get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async set(key, value) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('kv', 'readwrite');
+      tx.objectStore('kv').put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = tx.onabort = () => reject(tx.error);
+    });
+  },
+};
+
+/* 資料儲存:localStorage 包裝 + 匯出匯入
+ * 家電清單例外:照片/附件動輒上百 KB,iPhone Safari 的 localStorage 只有約 5MB,
+ * 一兩筆就塞爆,之後每次存檔都丟 QuotaExceededError、畫面上什麼都沒發生
+ * (看起來就像「沒辦法上傳照片」)。所以家電改存 IndexedDB(可用空間大很多),
+ * 記憶體裡留一份快取,讓 load() 維持同步呼叫、其他程式不用改。
+ * 啟動時要先 await Store.init() 把資料讀進快取,才能讀家電清單。 */
 const Store = {
   KEYS: { shows: 'fam.shows', stocks: 'fam.stocks', appliances: 'fam.appliances', settings: 'fam.settings', pendingSync: 'fam.pendingSync' },
+  IDB_KEYS: ['appliances'],
+  cache: {},
+  idbOk: false,
+
+  async init() {
+    try { await IDB.open(); this.idbOk = true; } catch { this.idbOk = false; }
+    if (!this.idbOk) return; // 開不了 IndexedDB(極少數瀏覽器/隱私模式)就退回 localStorage
+    for (const key of this.IDB_KEYS) {
+      let val;
+      try { val = await IDB.get(key); } catch { val = undefined; }
+      const legacy = localStorage.getItem(this.KEYS[key]);
+      if (val === undefined && legacy) {
+        // 舊版存在 localStorage 的資料搬進 IndexedDB
+        try { val = JSON.parse(legacy); await IDB.set(key, val); } catch { /* 搬失敗就先用記憶體裡的 */ }
+      }
+      // 搬完(或 IndexedDB 已經有資料)就刪掉 localStorage 那份,把配額還回去
+      if (legacy && val !== undefined) localStorage.removeItem(this.KEYS[key]);
+      this.cache[key] = val;
+    }
+  },
+
+  usesIdb(key) { return this.idbOk && this.IDB_KEYS.includes(key); },
 
   load(key, fallback) {
+    if (this.usesIdb(key)) return this.cache[key] ?? fallback;
     try {
       const raw = localStorage.getItem(this.KEYS[key]);
       return raw ? JSON.parse(raw) : fallback;
@@ -10,7 +71,17 @@ const Store = {
   },
 
   save(key, value) {
-    localStorage.setItem(this.KEYS[key], JSON.stringify(value));
+    if (this.usesIdb(key)) {
+      this.cache[key] = value;
+      IDB.set(key, value).catch(() => toast('⚠️ 手機儲存失敗,這次的變更只暫存在畫面上'));
+      return;
+    }
+    try {
+      localStorage.setItem(this.KEYS[key], JSON.stringify(value));
+    } catch {
+      // 以前這裡直接丟例外,後面的程式整段不跑,使用者只看到「按了沒反應」
+      toast('⚠️ 手機儲存空間不足,這次的變更沒存進手機');
+    }
   },
 
   exportAll() {

@@ -180,7 +180,11 @@ document.getElementById('import-file').addEventListener('change', e => {
 refreshTmdbStatus();
 refreshSyncStatus();
 Shows.render();          // 先用本機快取畫面
-Appliances.render();
 Stocks.init();
 switchPage('stocks');
-if (Sheets.enabled()) pullAndRender();   // 再從 Google Sheet 抓最新資料
+// 家電資料存在 IndexedDB(非同步),要先讀進快取才能畫、才能同步
+Store.init().then(() => {
+  Sheets.compactPending();
+  Appliances.render();
+  if (Sheets.enabled()) pullAndRender();   // 再從 Google Sheet 抓最新資料
+});

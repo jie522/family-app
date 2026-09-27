@@ -258,10 +258,18 @@ const Sheets = {
 
   pendingKey: 'pendingSync',
 
+  /* 家電那筆資料含照片+附件,動輒上百 KB。以前待送佇列(存在 localStorage)會整包
+   * 複製一份,每改一個欄位就多一份,很快把手機約 5MB 的配額塞爆,之後連家電本身都
+   * 存不進去。現在家電只記編號,真正送出時再從目前資料重組,同一筆也只留一個。 */
+  pendingEntry(id, action, data) {
+    return action === 'upsertAppliance' ? { id, action, applianceId: data.id } : { id, action, data };
+  },
+
   addPending(action, data) {
-    const q = Store.load(this.pendingKey, []);
+    let q = Store.load(this.pendingKey, []);
     const id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
-    q.push({ id, action, data });
+    if (action === 'upsertAppliance') q = q.filter(p => !(p.action === action && p.applianceId === data.id));
+    q.push(this.pendingEntry(id, action, data));
     Store.save(this.pendingKey, q);
     return id;
   },
@@ -270,13 +278,34 @@ const Sheets = {
     Store.save(this.pendingKey, Store.load(this.pendingKey, []).filter(p => p.id !== id));
   },
 
+  /* 舊版佇列裡可能還留著整包家電資料,啟動時換成只記編號(同一筆只留一個) */
+  compactPending() {
+    const q = Store.load(this.pendingKey, []);
+    const seen = new Set();
+    const out = [];
+    for (const p of q) {
+      if (p.action !== 'upsertAppliance') { out.push(p); continue; }
+      const aid = p.applianceId || p.data?.id;
+      if (!aid || seen.has(aid)) continue;
+      seen.add(aid);
+      out.push({ id: p.id, action: p.action, applianceId: aid });
+    }
+    if (JSON.stringify(out) !== JSON.stringify(q)) Store.save(this.pendingKey, out);
+  },
+
   /* App 啟動時、或每次要 pull() 之前呼叫:先把上次沒送成功(或來不及送出就關掉 App)
    * 的動作補送出去,確認送到才從佇列移除,還是連不上就留著下次再試。 */
   async flushPending() {
     const q = Store.load(this.pendingKey, []);
     for (const p of q) {
+      let data = p.data;
+      if (p.applianceId) {
+        const a = Store.load('appliances', []).find(x => x.id === p.applianceId);
+        if (!a) { this.removePending(p.id); continue; } // 已經刪掉了,不用補送
+        data = this.applianceToRow(a);
+      }
       try {
-        const json = await this.call(p.action, p.data);
+        const json = await this.call(p.action, data);
         if (json.ok) this.removePending(p.id);
       } catch { /* 還是連不上,留著下次再補送 */ }
     }

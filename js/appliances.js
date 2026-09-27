@@ -28,14 +28,6 @@ const Appliances = {
   },
 
   /* ---------- 圖片壓縮(照片/附件共用,見 Shows.compressPoster 的壓法) ---------- */
-  readImageFile(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
-  },
 
   // Google Sheet 單一儲存格硬上限是 5 萬字元,超過會整格寫入失敗——這條線不能退讓,
   // 所以下面壓到最後一輪還是超過的話,會再加碼壓到保證塞得下為止(犧牲畫質也要保正確性)。
@@ -59,15 +51,19 @@ const Appliances = {
       }
       ctx.putImageData(imgData, 0, 0);
     }
-    return canvas.toDataURL('image/jpeg', q);
+    const out = canvas.toDataURL('image/jpeg', q);
+    // iPhone Safari 的 canvas 記憶體有總上限,不手動歸零要等垃圾回收才釋放,
+    // 連壓好幾輪大尺寸很容易爆掉,之後 getContext 直接回傳 null、照片就處理失敗
+    canvas.width = canvas.height = 0;
+    return out;
   },
 
-  async compressImage(dataUrl, attempts, opts = {}) {
+  async compressImage(src, attempts, opts = {}) {
     const img = await new Promise((resolve, reject) => {
       const im = new Image();
       im.onload = () => resolve(im);
       im.onerror = reject;
-      im.src = dataUrl;
+      im.src = src;
     });
     const limit = opts.limit || 45000;
     const hardCap = opts.hardCap || this.SHEET_CELL_HARD_CAP;
@@ -87,12 +83,18 @@ const Appliances = {
 
   async pickAndCompress(file, attempts, opts) {
     if (!file) return null;
-    if (!file.type.startsWith('image/')) { toast('請選擇圖片檔'); return null; }
+    // 有些手機選照片時 file.type 會是空字串,交給解碼決定,解不開再報錯
+    if (file.type && !file.type.startsWith('image/')) { toast('請選擇圖片檔'); return null; }
+    toast('照片處理中…');
+    // 用 object URL 直接解碼,不先讀成好幾 MB 的 base64 字串,手機記憶體比較撐得住
+    const url = URL.createObjectURL(file);
     try {
-      return await this.compressImage(await this.readImageFile(file), attempts, opts);
+      return await this.compressImage(url, attempts, opts);
     } catch {
       toast('圖片處理失敗,換一張試試');
       return null;
+    } finally {
+      URL.revokeObjectURL(url);
     }
   },
 
