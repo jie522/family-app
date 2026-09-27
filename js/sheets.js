@@ -109,6 +109,17 @@ const Sheets = {
     let applianceRows = null;
     try { applianceRows = await this.fetchNamedTab(this.APPLIANCE_TAB, this.APPLIANCE_HEADER0); }
     catch { applianceRows = null; }
+    // ⚠️ 附件欄位結構改過好幾次(單欄 → 拆3格 → 拆6格),Apps Script 是使用者手動複製貼上
+    // 重新部署的,常常沒跟著改。如果 Sheet 上還是舊版表頭,直接照新版的欄位位置去讀,
+    // 會整排欄位錯位——把附件的 base64 資料讀進備註欄、或把備註洗成空字串,而且完全不會
+    // 報錯(這正是先前幾輪「附件模糊、備註被截斷」怎麼調都沒用的真正原因:根本不是壓縮
+    // 參數問題,是每次同步都被結構對不上的舊資料蓋掉)。這裡核對「備註」欄有沒有出現在
+    // 依照目前 ATT_CHUNKS 算出來的正確位置,對不上就整批不信任、保留手機本機原本的資料。
+    const applianceNotesColIdx = 11 + this.ATT_CHUNKS * 3; // 11 個基本欄位 + 3 個附件各 ATT_CHUNKS 格
+    if (applianceRows && applianceRows[0]?.[applianceNotesColIdx] !== '備註') {
+      applianceRows = null;
+      toast('⚠️ Google Sheet 的「家電清單」表頭是舊版,本次同步先跳過(手機上的資料不會被覆蓋)——記得依 apps-script/Code.gs 重新部署');
+    }
 
     const shows = new Map();
     // 劇集庫:劇名,平台,狀態,評分,筆記,海報,年份,類型,簡介,TMDBID,開始追劇日期
