@@ -3,10 +3,12 @@ const Appliances = {
   CATEGORIES: ['廚房家電', '視聽家電', '生活家電', '清潔家電', '冷氣空調', '3C', '其他'],
   WARRANTY_PRESETS: ['6個月', '1年', '2年', '3年', '5年', '10年', '終身保固'],
   ATT_LABELS: ['附件 1', '附件 2', '附件 3'],
-  // 家電照片(卡片縮圖用,壓小一點就好);附件(收據/保固卡等文件照)通常有小字,
-  // 要看得清楚就得留大一點的解析度,兩邊各用不同的壓縮目標。
-  PHOTO_ATTEMPTS: [[500, 0.75], [500, 0.5], [380, 0.5], [280, 0.4]],
-  DOC_ATTEMPTS: [[1000, 0.6], [800, 0.5], [650, 0.4], [500, 0.35], [400, 0.3]],
+  // 家電照片(列表縮圖用,壓小一點就好,保留彩色);附件(收據/保固卡等文件照)通常有
+  // 密密麻麻的小字,解析度不夠放大就是一團模糊——所以附件走灰階(去掉色彩資訊換取同樣
+  // 位元組預算下能留更高解析度)、解析度優先於畫質(文字清晰度靠像素夠不夠,不是靠色彩準不準)。
+  PHOTO_ATTEMPTS: [[600, 0.8], [600, 0.6], [450, 0.55], [350, 0.45], [280, 0.4]],
+  DOC_ATTEMPTS: [[1400, 0.6], [1200, 0.55], [1000, 0.5], [850, 0.45], [700, 0.4], [600, 0.35]],
+  DOC_LIMIT: 48000, // Google Sheet 單一儲存格上限 5 萬字元,留一點餘裕
 
   list() { return Store.load('appliances', []); },
   saveList(list) { Store.save('appliances', list); },
@@ -28,35 +30,76 @@ const Appliances = {
     });
   },
 
-  async compressImage(dataUrl, attempts) {
+  // Google Sheet 單一儲存格硬上限是 5 萬字元,超過會整格寫入失敗——這條線不能退讓,
+  // 所以下面壓到最後一輪還是超過的話,會再加碼壓到保證塞得下為止(犧牲畫質也要保正確性)。
+  SHEET_CELL_HARD_CAP: 49500,
+
+  renderJpeg(img, maxW, q, grayscale) {
+    const scale = Math.min(1, maxW / img.width);
+    const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    if (grayscale) {
+      // 轉灰階丟掉色彩資訊,同樣的位元組預算下能留更高解析度給文字細節——
+      // 附件多半是收據/保固卡這種看內容不看色彩的文件照,犧牲顏色換清晰度划算
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const px = imgData.data;
+      for (let i = 0; i < px.length; i += 4) {
+        const gray = px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114;
+        px[i] = px[i + 1] = px[i + 2] = gray;
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+    return canvas.toDataURL('image/jpeg', q);
+  },
+
+  async compressImage(dataUrl, attempts, opts = {}) {
     const img = await new Promise((resolve, reject) => {
       const im = new Image();
       im.onload = () => resolve(im);
       im.onerror = reject;
       im.src = dataUrl;
     });
+    const limit = opts.limit || 45000;
     let out = '';
     for (const [maxW, q] of attempts) {
-      const scale = Math.min(1, maxW / img.width);
-      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      out = canvas.toDataURL('image/jpeg', q);
-      if (out.length < 45000) return out; // 留餘裕給 Sheet 儲存格 5 萬字元上限
+      out = this.renderJpeg(img, maxW, q, opts.grayscale);
+      if (out.length < limit) return out;
+    }
+    // 內容特別密(例如密密麻麻的小字+雜訊),連最小的嘗試都還是超過——
+    // 繼續往下壓到保證能塞進 Sheet 儲存格為止,不然這筆資料會整個存不進去
+    for (const [maxW, q] of [[400, 0.25], [280, 0.2], [180, 0.15]]) {
+      if (out.length < this.SHEET_CELL_HARD_CAP) break;
+      out = this.renderJpeg(img, maxW, q, opts.grayscale);
     }
     return out;
   },
 
-  async pickAndCompress(file, attempts) {
+  async pickAndCompress(file, attempts, opts) {
     if (!file) return null;
     if (!file.type.startsWith('image/')) { toast('請選擇圖片檔'); return null; }
     try {
-      return await this.compressImage(await this.readImageFile(file), attempts);
+      return await this.compressImage(await this.readImageFile(file), attempts, opts);
     } catch {
       toast('圖片處理失敗,換一張試試');
       return null;
     }
+  },
+
+  /* 在新視窗放大檢視(附件、家電照片共用)——帶正確的 viewport,手機上才能正常雙指縮放看細節 */
+  viewImage(dataUrl) {
+    if (!dataUrl) return;
+    const w = window.open();
+    if (!w) { toast('瀏覽器擋住了新視窗,允許彈出視窗後再試一次'); return; }
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>檢視照片</title>
+      <style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh}
+      img{max-width:100%;height:auto;display:block}</style></head>
+      <body><img src="${dataUrl}"></body></html>`);
+    w.document.close();
   },
 
   /* ---------- 保固到期試算(輸入是自由文字,能辨識常見格式就順便算到期日) ---------- */
@@ -98,7 +141,7 @@ const Appliances = {
 
   /* ---------- 列表 ---------- */
   render() {
-    const grid = document.getElementById('appliance-grid');
+    const listEl = document.getElementById('appliance-list');
     const empty = document.getElementById('appliance-empty');
     const list = [...this.list()].sort((a, b) => {
       const da = a.purchaseDate || '', db = b.purchaseDate || '';
@@ -107,24 +150,27 @@ const Appliances = {
     });
 
     empty.classList.toggle('hidden', list.length > 0);
-    grid.innerHTML = list.map(a => {
+    listEl.innerHTML = list.map(a => {
       const photo = a.photo
-        ? `<img class="appliance-photo" src="${esc(a.photo)}" alt="" loading="lazy">`
-        : `<div class="appliance-photo placeholder">🔌</div>`;
+        ? `<img class="appliance-row-photo" src="${esc(a.photo)}" alt="" loading="lazy">`
+        : `<div class="appliance-row-photo placeholder">🔌</div>`;
       const wstat = this.warrantyStatus(a.purchaseDate, a.warranty);
-      return `<button class="show-card" data-id="${esc(a.id)}">
+      const sub = [a.brand, a.category].filter(Boolean).map(esc).join(' · ');
+      return `<button class="appliance-row" data-id="${esc(a.id)}">
         ${photo}
-        <div class="show-card-body">
-          <div class="show-card-title">${esc(a.name)}</div>
-          <div class="show-card-sub">${[a.brand, a.category].filter(Boolean).map(esc).join(' · ')}</div>
-          ${a.price ? `<div class="show-card-sub">💰 ${esc(this.fmtPrice(a.price))}</div>` : ''}
-          ${wstat ? `<div class="show-card-sub"><span class="chip ${wstat.cls}">${esc(wstat.label)}</span></div>` : ''}
-          ${a.notes ? `<div class="show-card-sub">📝 ${esc(a.notes.length > 24 ? a.notes.slice(0, 24) + '…' : a.notes)}</div>` : ''}
+        <div class="appliance-row-body">
+          <div class="appliance-row-title">${esc(a.name)}</div>
+          ${sub ? `<div class="appliance-row-sub">${sub}</div>` : ''}
+          ${a.notes ? `<div class="appliance-row-sub">📝 ${esc(a.notes.length > 30 ? a.notes.slice(0, 30) + '…' : a.notes)}</div>` : ''}
+        </div>
+        <div class="appliance-row-right">
+          ${a.price ? `<div class="appliance-row-price">${esc(this.fmtPrice(a.price))}</div>` : ''}
+          ${wstat ? `<span class="chip ${wstat.cls}">${esc(wstat.label)}</span>` : ''}
         </div>
       </button>`;
     }).join('');
 
-    grid.querySelectorAll('.show-card').forEach(el =>
+    listEl.querySelectorAll('.appliance-row').forEach(el =>
       el.addEventListener('click', () => this.openDetail(el.dataset.id)));
   },
 
@@ -215,7 +261,7 @@ const Appliances = {
       document.getElementById('a-att-file-' + i).addEventListener('change', async e => {
         const file = e.target.files[0];
         e.target.value = '';
-        const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS);
+        const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS, { grayscale: true, limit: this.DOC_LIMIT });
         if (!dataUrl) return;
         uploadedAttachments[i] = dataUrl;
         const row = attBox.children[i];
@@ -328,7 +374,8 @@ const Appliances = {
     };
     renderWarrantyStatus();
 
-    // 照片
+    // 照片(點縮圖放大看,點右下角相機圖示才是換照片)
+    document.getElementById('d-photo-img').addEventListener('click', () => this.viewImage(a.photo));
     document.getElementById('d-photo-btn').addEventListener('click', () =>
       document.getElementById('d-photo-file').click());
     document.getElementById('d-photo-file').addEventListener('change', async e => {
@@ -405,10 +452,7 @@ const Appliances = {
           <input type="file" id="d-att-file-${i}" accept="image/*" hidden>
         </div>`).join('');
       attBox.querySelectorAll('[data-view]').forEach(btn =>
-        btn.addEventListener('click', () => {
-          const w = window.open();
-          if (w) w.document.write(`<img src="${a.attachments[+btn.dataset.view]}" style="max-width:100%">`);
-        }));
+        btn.addEventListener('click', () => this.viewImage(a.attachments[+btn.dataset.view])));
       attBox.querySelectorAll('[data-up]').forEach(btn =>
         btn.addEventListener('click', () => document.getElementById('d-att-file-' + btn.dataset.up).click()));
       attBox.querySelectorAll('[data-rm]').forEach(btn =>
@@ -421,7 +465,7 @@ const Appliances = {
         document.getElementById('d-att-file-' + i).addEventListener('change', async e => {
           const file = e.target.files[0];
           e.target.value = '';
-          const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS);
+          const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS, { grayscale: true, limit: this.DOC_LIMIT });
           if (!dataUrl) return;
           a.attachments[i] = dataUrl;
           save(); syncAppliance();
