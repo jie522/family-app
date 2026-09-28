@@ -59,6 +59,12 @@ document.querySelectorAll('#show-filter button').forEach(btn =>
     Shows.render();
   }));
 
+/* ---------- 追劇搜尋(劇名/平台/筆記,在目前選的分類內找) ---------- */
+document.getElementById('show-search').addEventListener('input', e => {
+  Shows.search = e.target.value;
+  Shows.render();
+});
+
 /* ---------- 設定頁 ---------- */
 const tmdbInput = document.getElementById('tmdb-key');
 const tmdbStatus = document.getElementById('tmdb-status');

@@ -3,6 +3,7 @@ const Shows = {
   STATUS: { watching: '追劇中', want: '想看', done: '看完' },
   PLATFORMS: ['Netflix', 'Disney+', '愛奇藝', 'KKTV', 'friDay影音', 'Hami Video', 'YouTube', '電視'],
   filter: 'watching',
+  search: '',
 
   list() { return Store.load('shows', []); },
   saveList(list) { Store.save('shows', list); },
@@ -71,7 +72,9 @@ const Shows = {
     const empty = document.getElementById('show-empty');
     const all = this.list();
     let list = all;
-    if (this.filter !== 'all') list = all.filter(s => s.status === this.filter);
+    if (this.filter !== 'all') list = list.filter(s => s.status === this.filter);
+    const q = (this.search || '').trim().toLowerCase();
+    if (q) list = list.filter(s => [s.title, s.platform, s.notes].some(v => (v || '').toLowerCase().includes(q)));
     list.sort((a, b) => {
       const da = this.lastWatchDate(a) || '';
       const db = this.lastWatchDate(b) || '';
@@ -80,9 +83,10 @@ const Shows = {
     });
 
     empty.classList.toggle('hidden', list.length > 0);
-    empty.querySelector('p').innerHTML = all.length
-      ? `「${this.STATUS[this.filter] || ''}」分類目前沒有劇`
-      : '還沒有劇喔!<br>按右上角「＋」新增第一部劇';
+    empty.querySelector('p').innerHTML = !all.length
+      ? '還沒有劇喔!<br>按右上角「＋」新增第一部劇'
+      : q ? `找不到符合「${esc(this.search.trim())}」的劇`
+      : `「${this.STATUS[this.filter] || ''}」分類目前沒有劇`;
     grid.innerHTML = list.map(s => {
       const poster = s.poster
         ? `<img class="show-poster" src="${esc(s.poster)}" alt="" loading="lazy">`

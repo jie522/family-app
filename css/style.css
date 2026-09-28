@@ -79,6 +79,8 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 .page { display: none; }
 .page.active { display: block; }
 
+.show-search { margin: 4px 0; }
+
 /* ============ 分段選單 ============ */
 .segmented {
   display: flex; gap: 6px; margin: 4px 0 14px;
