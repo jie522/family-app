@@ -1,5 +1,6 @@
 /* 主程式:頁籤切換、彈窗、設定 */
 const Modal = {
+  scrollY: 0,
   open(html) {
     const backdrop = document.getElementById('modal-backdrop');
     const modal = document.getElementById('modal');
@@ -7,10 +8,21 @@ const Modal = {
     backdrop.classList.remove('hidden');
     modal.querySelectorAll('[data-close]').forEach(el =>
       el.addEventListener('click', () => this.close()));
+    // 鎖住手機版背景頁面:遮罩雖然是 position:fixed,但 iOS Safari 光靠這個蓋不住底下
+    // body 還是能被拖動捲動/彈跳的問題(彈窗開著時在內容上按住移動,畫面會跟著跑)。
+    // 連 body 本身也固定住,關閉時再還原到原本捲動的位置。
+    this.scrollY = window.scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${this.scrollY}px`;
+    document.body.style.width = '100%';
   },
   close() {
     document.getElementById('modal-backdrop').classList.add('hidden');
     document.getElementById('modal').innerHTML = '';
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+    window.scrollTo(0, this.scrollY);
   },
 };
 
@@ -63,6 +75,12 @@ document.querySelectorAll('#show-filter button').forEach(btn =>
 document.getElementById('show-search').addEventListener('input', e => {
   Shows.search = e.target.value;
   Shows.render();
+});
+
+/* ---------- 家電搜尋(名稱/品牌/分類/備註) ---------- */
+document.getElementById('appliance-search').addEventListener('input', e => {
+  Appliances.search = e.target.value;
+  Appliances.render();
 });
 
 /* ---------- 設定頁 ---------- */

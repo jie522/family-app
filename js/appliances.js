@@ -9,6 +9,7 @@ const Appliances = {
   // Google Sheet 單一儲存格上限是 5 萬字元,一張像樣的文件照壓縮後常常不夠塞——所以附件
   // 拆成好幾格存(見 Sheets.ATT_CHUNKS/ATT_CHUNK_SIZE),預算是單一儲存格的好幾倍,才有辦法
   // 留住足夠解析度。家電照片本身只是列表縮圖,不用放大看細節,維持單一儲存格就好。
+  search: '',
   PHOTO_ATTEMPTS: [[600, 0.8], [600, 0.6], [450, 0.55], [350, 0.45], [280, 0.4]],
   DOC_ATTEMPTS: [[2600, 0.75], [2400, 0.72], [2200, 0.7], [2000, 0.68], [1800, 0.65], [1600, 0.62],
                  [1400, 0.6], [1200, 0.55], [1000, 0.5], [850, 0.45], [700, 0.4]],
@@ -152,13 +153,22 @@ const Appliances = {
   render() {
     const listEl = document.getElementById('appliance-list');
     const empty = document.getElementById('appliance-empty');
-    const list = [...this.list()].sort((a, b) => {
+    const all = this.list();
+    const q = (this.search || '').trim().toLowerCase();
+    const list = (q
+      ? all.filter(a => [a.name, a.brand, a.category, a.notes].some(v => (v || '').toLowerCase().includes(q)))
+      : [...all]
+    ).sort((a, b) => {
       const da = a.purchaseDate || '', db = b.purchaseDate || '';
       if (da !== db) return db.localeCompare(da); // 買比較新的排前面
       return (b.addedAt || 0) - (a.addedAt || 0);
     });
 
     empty.classList.toggle('hidden', list.length > 0);
+    empty.querySelector('p').innerHTML = !all.length
+      ? '還沒有登錄家電喔!<br>按右上角「＋」新增第一項'
+      : q ? `找不到符合「${esc(this.search.trim())}」的家電`
+      : '還沒有登錄家電喔!<br>按右上角「＋」新增第一項';
     listEl.innerHTML = list.map(a => {
       const photo = a.photo
         ? `<img class="appliance-row-photo" src="${esc(a.photo)}" alt="" loading="lazy">`

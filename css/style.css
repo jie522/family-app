@@ -79,7 +79,7 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 .page { display: none; }
 .page.active { display: block; }
 
-.show-search { margin: 4px 0; }
+.list-search { margin: 4px 0; }
 
 /* ============ 分段選單 ============ */
 .segmented {
