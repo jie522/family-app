@@ -183,6 +183,7 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 }
 .appliance-row-right { flex-shrink: 0; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .appliance-row-price { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.appliance-row.retired { opacity: .55; } /* 報廢的家電還留在清單裡看得到、搜得到,但整列調暗跟還在用的區隔開 */
 .detail-photo-wrap { position: relative; width: 110px; flex-shrink: 0; }
 .detail-photo {
   width: 110px; aspect-ratio: 4/3; object-fit: cover; border-radius: 10px;

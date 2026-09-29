@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 16; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 17; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '開始追劇日期', '更新時間'];
@@ -35,7 +35,7 @@ var APPLIANCE_HEADERS = (function () {
   for (var n = 1; n <= 3; n++) {
     for (var p = 1; p <= APPLIANCE_ATT_CHUNKS; p++) headers.push('附件' + n + '-' + p);
   }
-  headers.push('備註', '更新時間');
+  headers.push('備註', '狀態', '更新時間');
   return headers;
 })();
 
@@ -239,7 +239,7 @@ function applianceRowValues(d) {
   for (var n = 1; n <= 3; n++) {
     for (var p = 1; p <= APPLIANCE_ATT_CHUNKS; p++) row.push(d['att' + n + '_' + p] || '');
   }
-  row.push(d.notes || '', new Date());
+  row.push(d.notes || '', d.status || '使用中', new Date());
   return row;
 }
 

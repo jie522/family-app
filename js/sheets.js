@@ -12,6 +12,7 @@ const Sheets = {
   STOCK_HEADER0: '代號',  // 用來核對真的抓到「股票追蹤」分頁
   APPLIANCE_HEADER0: '編號', // 用來核對真的抓到「家電清單」分頁
   STATUS_ZH: { want: '想看', watching: '追劇中', done: '看完' },
+  APPLIANCE_STATUS_ZH: { inUse: '使用中', retired: '報廢' },
 
   // 附件(收據/保固卡等文件照)常常壓縮完還是超過 Sheet 單一儲存格 5 萬字元上限,
   // 不夠塞就沒辦法看清楚小字——所以每個附件拆成好幾格存,合起來的預算才夠留住解析度。
@@ -88,6 +89,11 @@ const Sheets = {
   zhToStatus(zh) {
     for (const [k, v] of Object.entries(this.STATUS_ZH)) if (v === zh) return k;
     return 'watching';
+  },
+
+  zhToApplianceStatus(zh) {
+    for (const [k, v] of Object.entries(this.APPLIANCE_STATUS_ZH)) if (v === zh) return k;
+    return 'inUse';
   },
 
   /* 從 Sheet 拉全部資料,組成 App 的劇清單/股票清單並存入本機快取 */
@@ -189,7 +195,12 @@ const Sheets = {
     }
 
     // 家電清單:編號,品名,品牌,分類,型號,購買日期,價格,保固期間,採購地點,參考網址,照片,
-    // 附件1-1~1-3,附件2-1~2-3,附件3-1~3-3(每個附件拆 ATT_CHUNKS 格存,見上面的說明),備註
+    // 附件1-1~1-3,附件2-1~2-3,附件3-1~3-3(每個附件拆 ATT_CHUNKS 格存,見上面的說明),備註,狀態
+    // ⚠️ 「狀態」欄是後來加的,插在備註後面、更新時間前面,不影響上面備註欄位置的核對。
+    // 一樣先核對表頭文字再決定要不要讀,Sheet 還沒補上這欄期間保留手機本機原本的值——
+    // 跟「開始追劇日期會不見」是同一種坑,這次先預防。
+    const hasApplianceStatusCol = applianceRows?.[0]?.[applianceNotesColIdx + 1] === '狀態';
+    const prevApplianceStatuses = new Map(Store.load('appliances', []).map(a => [a.id, a.status || 'inUse']));
     let appliances = null;
     if (applianceRows) {
       appliances = applianceRows.slice(1)
@@ -200,14 +211,17 @@ const Sheets = {
           const attachments = [0, 1, 2].map(n =>
             this.joinAttachment(rest.slice(n * attCount, n * attCount + attCount)));
           const notes = rest[3 * attCount];
+          const statusZh = rest[3 * attCount + 1];
+          const rowId = (id || '').trim() || ('a' + i);
           return {
-            id: (id || '').trim() || ('a' + i),
+            id: rowId,
             name: (name || '').trim(),
             brand: brand || '', category: category || '', model: model || '',
             purchaseDate: purchaseDate ? this.normDate(purchaseDate) : '',
             price: price ? +price : 0,
             warranty: warranty || '', place: place || '', url: url || '',
             photo: photo || '', attachments,
+            status: hasApplianceStatusCol ? this.zhToApplianceStatus(statusZh) : (prevApplianceStatuses.get(rowId) || 'inUse'),
             notes: notes || '', addedAt: i + 1,
           };
         })
@@ -338,6 +352,7 @@ const Sheets = {
       model: a.model || '', purchaseDate: a.purchaseDate || '', price: a.price || 0,
       warranty: a.warranty || '', place: a.place || '', url: a.url || '',
       photo: a.photo || '', notes: a.notes || '',
+      status: this.APPLIANCE_STATUS_ZH[a.status] || this.APPLIANCE_STATUS_ZH.inUse,
     };
     att.forEach((val, i) => {
       this.splitAttachment(val).forEach((chunk, p) => { row[`att${i + 1}_${p + 1}`] = chunk; });

@@ -1,5 +1,6 @@
 /* 家庭採購家電登錄模組 */
 const Appliances = {
+  STATUS: { inUse: '使用中', retired: '報廢' },
   CATEGORIES: ['廚房家電', '視聽家電', '生活家電', '清潔家電', '冷氣空調', '3C', '其他'],
   WARRANTY_PRESETS: ['6個月', '1年', '2年', '3年', '5年', '10年', '終身保固'],
   ATT_LABELS: ['附件 1', '附件 2', '附件 3'],
@@ -159,6 +160,9 @@ const Appliances = {
       ? all.filter(a => [a.name, a.brand, a.category, a.notes].some(v => (v || '').toLowerCase().includes(q)))
       : [...all]
     ).sort((a, b) => {
+      // 報廢的排到最後面,不擠掉還在用的家電,但還是留在清單裡看得到、搜得到
+      const ra = a.status === 'retired' ? 1 : 0, rb = b.status === 'retired' ? 1 : 0;
+      if (ra !== rb) return ra - rb;
       const da = a.purchaseDate || '', db = b.purchaseDate || '';
       if (da !== db) return db.localeCompare(da); // 買比較新的排前面
       return (b.addedAt || 0) - (a.addedAt || 0);
@@ -175,10 +179,13 @@ const Appliances = {
         : `<div class="appliance-row-photo placeholder">🔌</div>`;
       const wstat = this.warrantyStatus(a.purchaseDate, a.warranty);
       const sub = [a.brand, a.category].filter(Boolean).map(esc).join(' · ');
-      return `<button class="appliance-row" data-id="${esc(a.id)}">
+      const retired = a.status === 'retired';
+      const statusChip = `<span class="chip ${retired ? 'want' : 'done'}">${retired ? '🗑️' : '✅'} ${esc(this.STATUS[a.status] || this.STATUS.inUse)}</span>`;
+      return `<button class="appliance-row${retired ? ' retired' : ''}" data-id="${esc(a.id)}">
         ${photo}
         <div class="appliance-row-body">
           <div class="appliance-row-title">${esc(a.name)}</div>
+          <div class="appliance-row-sub">${statusChip}</div>
           ${sub ? `<div class="appliance-row-sub">${sub}</div>` : ''}
           ${a.purchaseDate ? `<div class="appliance-row-sub"><span class="chip">📅 ${esc(a.purchaseDate)}</span></div>` : ''}
         </div>
@@ -197,9 +204,22 @@ const Appliances = {
     return `<input type="text" id="${id}" placeholder="${esc(placeholder || '')}" value="${esc(value || '')}">`;
   },
 
+  /* 清單裡已經打過的品牌/分類,拿來當下拉建議,不用每次都重打一次 */
+  usedValues(field) {
+    return [...new Set(this.list().map(a => (a[field] || '').trim()).filter(Boolean))]
+      .sort((x, y) => x.localeCompare(y, 'zh-TW'));
+  },
+
   categoryInput(id, value = '') {
+    const options = [...new Set([...this.CATEGORIES, ...this.usedValues('category')])];
     return `<input type="text" id="${id}" list="appliance-category-list" placeholder="例:廚房家電(可留空)" value="${esc(value)}">
-      <datalist id="appliance-category-list">${this.CATEGORIES.map(c => `<option value="${esc(c)}">`).join('')}</datalist>`;
+      <datalist id="appliance-category-list">${options.map(c => `<option value="${esc(c)}">`).join('')}</datalist>`;
+  },
+
+  brandInput(id, value = '') {
+    const options = this.usedValues('brand');
+    return `<input type="text" id="${id}" list="appliance-brand-list" placeholder="例:大金(可留空)" value="${esc(value)}">
+      <datalist id="appliance-brand-list">${options.map(b => `<option value="${esc(b)}">`).join('')}</datalist>`;
   },
 
   warrantyInput(id, value = '') {
@@ -241,7 +261,7 @@ const Appliances = {
       <label>品名 *</label>
       ${this.textInput('a-name', '', '例:變頻冷氣')}
       <label>品牌</label>
-      ${this.textInput('a-brand', '', '例:大金')}
+      ${this.brandInput('a-brand')}
       <label>分類</label>
       ${this.categoryInput('a-category')}
       <label>型號 / 序號</label>
@@ -337,6 +357,7 @@ const Appliances = {
     const a = {
       id: 'a' + Date.now(),
       attachments: ['', '', ''],
+      status: 'inUse', // 新增的家電預設「使用中」,要標記報廢再到詳情頁改
       ...item,
       addedAt: Date.now(),
     };
@@ -380,10 +401,16 @@ const Appliances = {
         </div>
       </div>
 
+      <label>狀態</label>
+      <div class="status-picker" id="d-appliance-status">
+        ${Object.entries(this.STATUS).map(([k, v]) =>
+          `<button data-s="${k}" class="${(a.status || 'inUse') === k ? 'active' : ''}">${v}</button>`).join('')}
+      </div>
+
       <label>品名</label>
       ${this.textInput('d-name', a.name)}
       <label>品牌</label>
-      ${this.textInput('d-brand', a.brand)}
+      ${this.brandInput('d-brand', a.brand)}
       <label>分類</label>
       ${this.categoryInput('d-category', a.category)}
       <label>型號 / 序號</label>
@@ -414,6 +441,14 @@ const Appliances = {
     };
     renderWarrantyStatus();
     this.autoGrowTextarea(document.getElementById('d-notes')); // 一打開就長到能顯示既有備註全文,不用捲動
+
+    // 使用中 / 報廢
+    document.querySelectorAll('#d-appliance-status button').forEach(btn =>
+      btn.addEventListener('click', () => {
+        a.status = btn.dataset.s;
+        document.querySelectorAll('#d-appliance-status button').forEach(b => b.classList.toggle('active', b === btn));
+        save(); syncAppliance();
+      }));
 
     // 照片(點縮圖放大看,點右下角相機圖示才是換照片)
     document.getElementById('d-photo-img').addEventListener('click', () => this.viewImage(a.photo));
