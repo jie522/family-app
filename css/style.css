@@ -162,8 +162,9 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 .appliance-row {
   display: flex; align-items: center; gap: 12px;
   background: var(--card); border-radius: var(--radius);
-  padding: 10px 12px; box-shadow: var(--shadow);
-  border: none; width: 100%; color: var(--text); text-align: left;
+  padding: 10px 12px 10px 9px; box-shadow: var(--shadow);
+  border: none; border-left: 3px solid transparent; width: 100%;
+  color: var(--text); text-align: left;
 }
 .appliance-row-photo {
   width: 56px; height: 56px; object-fit: cover; border-radius: 10px;
@@ -183,7 +184,11 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 }
 .appliance-row-right { flex-shrink: 0; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .appliance-row-price { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.appliance-row.retired { opacity: .55; } /* 報廢的家電還留在清單裡看得到、搜得到,但整列調暗跟還在用的區隔開 */
+/* 報廢的家電還留在清單裡看得到、搜得到,但要一眼看出跟還在用的不一樣——
+   原本用整列調暗(opacity)結果連狀態色塊本身都跟著變淡,反而更不明顯,
+   改成跟股票漲跌列一致的左側色條 + 淡色背景 + 品名加刪除線,對比更清楚 */
+.appliance-row.retired { border-left-color: var(--up); background: rgba(224,52,47,.06); }
+.appliance-row.retired .appliance-row-title { text-decoration: line-through; color: var(--text2); }
 .detail-photo-wrap { position: relative; width: 110px; flex-shrink: 0; }
 .detail-photo {
   width: 110px; aspect-ratio: 4/3; object-fit: cover; border-radius: 10px;
