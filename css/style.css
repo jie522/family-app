@@ -303,6 +303,20 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
 .modal textarea { min-height: 90px; resize: vertical; }
 
 /* 搜尋結果 */
+/* 自己畫的下拉建議清單(品牌/分類/平台這類文字輸入框用,見 store.js 的 bindAutocomplete) */
+.ac-list {
+  margin-top: 4px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); max-height: 160px; overflow-y: auto; box-shadow: var(--shadow);
+}
+.ac-list.hidden { display: none; }
+.ac-item {
+  display: block; width: 100%; text-align: left; padding: 9px 12px;
+  font-size: 14px; color: var(--text); background: none; border: none;
+  border-bottom: 1px solid var(--border);
+}
+.ac-item:last-child { border-bottom: none; }
+.ac-item:active { background: var(--accent-soft); }
+
 .search-results { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .search-item {
   display: flex; gap: 12px; align-items: center;

@@ -176,9 +176,15 @@ const Shows = {
     this.renderManualForm(document.getElementById('manual-area'));
   },
 
+  /* 清單裡其他劇打過的平台,跟固定的 8 個預設選項一起列進下拉建議(見 Appliances.usedValues 同樣做法) */
+  usedPlatforms() {
+    return [...new Set(this.list().map(s => (s.platform || '').trim()).filter(Boolean))]
+      .sort((x, y) => x.localeCompare(y, 'zh-TW'));
+  },
+  platformOptions() { return [...new Set([...this.PLATFORMS, ...this.usedPlatforms()])]; },
+
   platformInput(id, value = '') {
-    return `<input type="text" id="${id}" list="platform-list" placeholder="例:Netflix(可留空)" value="${esc(value)}">
-      <datalist id="platform-list">${this.PLATFORMS.map(p => `<option value="${esc(p)}">`).join('')}</datalist>`;
+    return `<input type="text" id="${id}" placeholder="例:Netflix(可留空)" value="${esc(value)}">`;
   },
 
   renderManualForm(container) {
@@ -196,6 +202,7 @@ const Shows = {
       <div id="m-poster-preview"></div>
       <button class="btn primary block" id="m-add">加入清單</button>
     `;
+    bindAutocomplete(document.getElementById('m-platform'), () => this.platformOptions());
     let uploadedPoster = '';
     container.querySelector('#m-poster-upload').addEventListener('click', () =>
       container.querySelector('#m-poster-file').click());
@@ -367,6 +374,7 @@ const Shows = {
       s.platform = e.target.value.trim();
       this.saveList(list); syncShow(1200);
     });
+    bindAutocomplete(document.getElementById('d-platform'), () => this.platformOptions());
 
     // 評分
     document.querySelectorAll('#d-stars button').forEach(btn =>

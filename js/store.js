@@ -190,3 +190,33 @@ function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/* 自己畫的下拉建議清單,取代原生 <input list> + <datalist>——iOS Safari 對 datalist
+ * 支援不穩定(常常整個不顯示、或沒有任何提示看得出來有下拉選單可以點),換成自己畫的
+ * 清單,行為在所有瀏覽器一致,也比較看得出來「這裡有東西可以選」。
+ * getOptions() 每次都重新呼叫,才會抓到當下最新的歷史值清單。 */
+function bindAutocomplete(input, getOptions) {
+  if (!input) return;
+  const box = document.createElement('div');
+  box.className = 'ac-list hidden';
+  input.insertAdjacentElement('afterend', box);
+
+  const renderList = () => {
+    const q = input.value.trim().toLowerCase();
+    const opts = getOptions().filter(v => !q || (v.toLowerCase().includes(q) && v.toLowerCase() !== q));
+    if (!opts.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    box.innerHTML = opts.map(v => `<button type="button" class="ac-item">${esc(v)}</button>`).join('');
+    box.classList.remove('hidden');
+    box.querySelectorAll('.ac-item').forEach(btn =>
+      // mousedown(不是 click)搶在 input 的 blur 事件關掉清單之前先觸發,不然點了沒反應
+      btn.addEventListener('mousedown', e => {
+        e.preventDefault();
+        input.value = btn.textContent;
+        box.classList.add('hidden');
+        input.dispatchEvent(new Event('input', { bubbles: true })); // 讓原本監聽 input 的存檔邏輯照常觸發
+      }));
+  };
+  input.addEventListener('focus', renderList);
+  input.addEventListener('input', renderList);
+  input.addEventListener('blur', () => setTimeout(() => box.classList.add('hidden'), 150));
+}

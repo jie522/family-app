@@ -209,17 +209,14 @@ const Appliances = {
     return [...new Set(this.list().map(a => (a[field] || '').trim()).filter(Boolean))]
       .sort((x, y) => x.localeCompare(y, 'zh-TW'));
   },
+  categoryOptions() { return [...new Set([...this.CATEGORIES, ...this.usedValues('category')])]; },
 
   categoryInput(id, value = '') {
-    const options = [...new Set([...this.CATEGORIES, ...this.usedValues('category')])];
-    return `<input type="text" id="${id}" list="appliance-category-list" placeholder="例:廚房家電(可留空)" value="${esc(value)}">
-      <datalist id="appliance-category-list">${options.map(c => `<option value="${esc(c)}">`).join('')}</datalist>`;
+    return `<input type="text" id="${id}" placeholder="例:廚房家電(可留空)" value="${esc(value)}">`;
   },
 
   brandInput(id, value = '') {
-    const options = this.usedValues('brand');
-    return `<input type="text" id="${id}" list="appliance-brand-list" placeholder="例:大金(可留空)" value="${esc(value)}">
-      <datalist id="appliance-brand-list">${options.map(b => `<option value="${esc(b)}">`).join('')}</datalist>`;
+    return `<input type="text" id="${id}" placeholder="例:大金(可留空)" value="${esc(value)}">`;
   },
 
   warrantyInput(id, value = '') {
@@ -290,6 +287,8 @@ const Appliances = {
     `);
 
     document.getElementById('a-notes').addEventListener('input', e => this.autoGrowTextarea(e.target));
+    bindAutocomplete(document.getElementById('a-brand'), () => this.usedValues('brand'));
+    bindAutocomplete(document.getElementById('a-category'), () => this.categoryOptions());
 
     let uploadedPhoto = '';
     document.getElementById('a-photo-upload').addEventListener('click', () =>
@@ -441,6 +440,8 @@ const Appliances = {
     };
     renderWarrantyStatus();
     this.autoGrowTextarea(document.getElementById('d-notes')); // 一打開就長到能顯示既有備註全文,不用捲動
+    bindAutocomplete(document.getElementById('d-brand'), () => this.usedValues('brand'));
+    bindAutocomplete(document.getElementById('d-category'), () => this.categoryOptions());
 
     // 使用中 / 報廢
     document.querySelectorAll('#d-appliance-status button').forEach(btn =>
