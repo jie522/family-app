@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 17; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 18; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '開始追劇日期', '更新時間'];
@@ -38,6 +38,12 @@ var APPLIANCE_HEADERS = (function () {
   headers.push('備註', '狀態', '更新時間');
   return headers;
 })();
+// 美食地圖:店家清單 + 吃過的紀錄(一間店可以有很多筆紀錄,用「店家編號」對回去)
+// 座標存成「緯度,經度」一格文字,不拆兩欄數字——數字欄會被 Sheets 依顯示格式四捨五入,圖釘會跑掉
+var FOOD_PLACE_TAB = '美食地圖';
+var FOOD_PLACE_HEADERS = ['編號', '店名', '分類', '狀態', '想吃什麼', '地址', '座標', '連結', '更新時間'];
+var FOOD_VISIT_TAB = '美食紀錄';
+var FOOD_VISIT_HEADERS = ['編號', '店家編號', '日期', '時間', '吃了什麼', '評分', '花費', '跟誰', '心得', '照片1', '照片2', '更新時間'];
 
 function logSheet() {
   return SpreadsheetApp.getActiveSpreadsheet().getSheets()[0]; // 第一個分頁:日期,劇名,平台,備註
@@ -76,6 +82,32 @@ function applianceSheet() {
     sh.setFrozenRows(1);
   }
   sh.getRange('A:A').setNumberFormat('@'); // 編號欄強制文字格式
+  return sh;
+}
+
+function foodPlaceSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(FOOD_PLACE_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(FOOD_PLACE_TAB);
+    sh.appendRow(FOOD_PLACE_HEADERS);
+    sh.setFrozenRows(1);
+  }
+  sh.getRange('A:A').setNumberFormat('@'); // 編號
+  sh.getRange('G:G').setNumberFormat('@'); // 座標
+  return sh;
+}
+
+function foodVisitSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(FOOD_VISIT_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(FOOD_VISIT_TAB);
+    sh.appendRow(FOOD_VISIT_HEADERS);
+    sh.setFrozenRows(1);
+  }
+  // 編號/店家編號/日期/時間都強制文字,不讓 Sheets 自作主張轉成日期、時間物件
+  sh.getRange('A:D').setNumberFormat('@');
   return sh;
 }
 
@@ -123,6 +155,10 @@ function handle(action, d) {
     case 'deleteStock': deleteStock(d); return { ok: true };
     case 'upsertAppliance': upsertAppliance(d); return { ok: true };
     case 'deleteAppliance': deleteAppliance(d); return { ok: true };
+    case 'upsertFoodPlace': upsertFoodPlace(d); return { ok: true };
+    case 'deleteFoodPlace': deleteFoodPlace(d); return { ok: true };
+    case 'upsertFoodVisit': upsertFoodVisit(d); return { ok: true };
+    case 'deleteFoodVisit': deleteFoodVisit(d); return { ok: true };
     case 'tmdbSearch': return tmdbSearch(d);
     case 'quotes':     return quotes(d);
     case 'upsertReport': upsertReport(d); return { ok: true };
@@ -262,6 +298,47 @@ function deleteAppliance(d) {
   for (var i = rows.length - 1; i >= 1; i--) {
     if (String(rows[i][0]).trim() === id) sh.deleteRow(i + 1);
   }
+}
+
+/* ---------- 美食地圖 ---------- */
+function upsertById(sh, width, id, values) {
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === String(id).trim()) {
+      sh.getRange(i + 1, 1, 1, width).setValues([values]);
+      return;
+    }
+  }
+  sh.appendRow(values);
+}
+
+function deleteWhere(sh, col, id) {
+  id = String(id).trim();
+  var rows = sh.getDataRange().getValues();
+  for (var i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][col]).trim() === id) sh.deleteRow(i + 1);
+  }
+}
+
+function upsertFoodPlace(d) {
+  upsertById(foodPlaceSheet(), FOOD_PLACE_HEADERS.length, d.id, [
+    d.id || '', d.name || '', d.category || '', d.status || '想吃', d.wish || '',
+    d.address || '', d.coord || '', d.url || '', new Date()]);
+}
+
+function deleteFoodPlace(d) {
+  deleteWhere(foodPlaceSheet(), 0, d.id);
+  deleteWhere(foodVisitSheet(), 1, d.id); // 這間店的紀錄一起刪,不然留著也對不到店
+}
+
+function upsertFoodVisit(d) {
+  upsertById(foodVisitSheet(), FOOD_VISIT_HEADERS.length, d.id, [
+    d.id || '', d.placeId || '', d.date || '', d.time || '', d.dishes || '', d.rating || 0,
+    d.cost || 0, d.who || '', d.notes || '', d.photo1 || '', d.photo2 || '', new Date()]);
+}
+
+function deleteFoodVisit(d) {
+  deleteWhere(foodVisitSheet(), 0, d.id);
 }
 
 /* ---------- 股票分析報告(reports/ 資料夾內容的雲端鏡像) ---------- */
@@ -454,4 +531,6 @@ function bulk(d) {
   });
   (d.stocks || []).forEach(function (s) { upsertStock(s); });
   (d.appliances || []).forEach(function (a) { upsertAppliance(a); });
+  (d.foodPlaces || []).forEach(function (p) { upsertFoodPlace(p); });
+  (d.foodVisits || []).forEach(function (v) { upsertFoodVisit(v); });
 }

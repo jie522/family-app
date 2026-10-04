@@ -38,8 +38,12 @@ const IDB = {
  * 記憶體裡留一份快取,讓 load() 維持同步呼叫、其他程式不用改。
  * 啟動時要先 await Store.init() 把資料讀進快取,才能讀家電清單。 */
 const Store = {
-  KEYS: { shows: 'fam.shows', stocks: 'fam.stocks', appliances: 'fam.appliances', settings: 'fam.settings', pendingSync: 'fam.pendingSync' },
-  IDB_KEYS: ['appliances'],
+  KEYS: {
+    shows: 'fam.shows', stocks: 'fam.stocks', appliances: 'fam.appliances', settings: 'fam.settings', pendingSync: 'fam.pendingSync',
+    foodPlaces: 'fam.foodPlaces', foodVisits: 'fam.foodVisits', foodPrompt: 'fam.foodPrompt',
+  },
+  // 美食紀錄可以附照片,跟家電一樣存 IndexedDB;店家清單跟著放一起,兩邊讀得到的時機才一致
+  IDB_KEYS: ['appliances', 'foodPlaces', 'foodVisits'],
   cache: {},
   idbOk: false,
 
@@ -92,6 +96,8 @@ const Store = {
       shows: this.load('shows', []),
       stocks: this.load('stocks', []),
       appliances: this.load('appliances', []),
+      foodPlaces: this.load('foodPlaces', []),
+      foodVisits: this.load('foodVisits', []),
       settings: this.load('settings', {}),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -112,6 +118,8 @@ const Store = {
         if (Array.isArray(data.shows)) this.save('shows', data.shows);
         if (Array.isArray(data.stocks)) this.save('stocks', data.stocks);
         if (Array.isArray(data.appliances)) this.save('appliances', data.appliances);
+        if (Array.isArray(data.foodPlaces)) this.save('foodPlaces', data.foodPlaces);
+        if (Array.isArray(data.foodVisits)) this.save('foodVisits', data.foodVisits);
         if (data.settings) this.save('settings', data.settings);
         done(true);
       } catch {

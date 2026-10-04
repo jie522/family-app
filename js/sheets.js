@@ -13,6 +13,10 @@ const Sheets = {
   APPLIANCE_HEADER0: '編號', // 用來核對真的抓到「家電清單」分頁
   STATUS_ZH: { want: '想看', watching: '追劇中', done: '看完' },
   APPLIANCE_STATUS_ZH: { inUse: '使用中', retired: '報廢' },
+  // 美食地圖兩個分頁的第一欄也叫「編號」(跟家電清單一樣),所以多核對第二欄才算數
+  FOOD_PLACE_TAB: '美食地圖', FOOD_PLACE_HEADERS01: ['編號', '店名'],
+  FOOD_VISIT_TAB: '美食紀錄', FOOD_VISIT_HEADERS01: ['編號', '店家編號'],
+  FOOD_STATUS_ZH: { want: '想吃', been: '吃過' },
 
   // 附件(收據/保固卡等文件照)常常壓縮完還是超過 Sheet 單一儲存格 5 萬字元上限,
   // 不夠塞就沒辦法看清楚小字——所以每個附件拆成好幾格存,合起來的預算才夠留住解析度。
@@ -94,6 +98,22 @@ const Sheets = {
   zhToApplianceStatus(zh) {
     for (const [k, v] of Object.entries(this.APPLIANCE_STATUS_ZH)) if (v === zh) return k;
     return 'inUse';
+  },
+
+  zhToFoodStatus(zh) {
+    for (const [k, v] of Object.entries(this.FOOD_STATUS_ZH)) if (v === zh) return k;
+    return 'want';
+  },
+
+  normTime(s) {
+    const m = String(s || '').match(/(\d{1,2}):(\d{2})/);
+    return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
+  },
+
+  async fetchFoodTab(tabName, headers01) {
+    let rows = null;
+    try { rows = await this.fetchNamedTab(tabName, headers01[0]); } catch { rows = null; }
+    return rows && rows[0][1] === headers01[1] ? rows : null;
   },
 
   /* 從 Sheet 拉全部資料,組成 App 的劇清單/股票清單並存入本機快取 */
@@ -229,6 +249,36 @@ const Sheets = {
       Store.save('appliances', appliances);
     }
 
+    // 美食地圖:編號,店名,分類,狀態,想吃什麼,地址,座標(「緯度,經度」一格文字),連結
+    // 分頁還沒建立(Apps Script 還沒更新到有美食地圖的版本)就保留手機本機資料
+    const foodPlaceRows = await this.fetchFoodTab(this.FOOD_PLACE_TAB, this.FOOD_PLACE_HEADERS01);
+    if (foodPlaceRows) {
+      const places = foodPlaceRows.slice(1).map(([id, name, category, statusZh, wish, address, coord, url], i) => {
+        const [lat, lng] = String(coord || '').split(',').map(v => parseFloat(v));
+        const ok = Number.isFinite(lat) && Number.isFinite(lng);
+        return {
+          id: (id || '').trim() || ('f' + i), name: (name || '').trim(),
+          category: category || '', status: this.zhToFoodStatus(statusZh),
+          wish: wish || '', address: address || '',
+          lat: ok ? lat : null, lng: ok ? lng : null,
+          url: url || '', addedAt: i + 1,
+        };
+      }).filter(p => p.name);
+      Store.save('foodPlaces', places);
+    }
+    // 美食紀錄:編號,店家編號,日期,時間,吃了什麼,評分,花費,跟誰,心得,照片1,照片2
+    const foodVisitRows = await this.fetchFoodTab(this.FOOD_VISIT_TAB, this.FOOD_VISIT_HEADERS01);
+    if (foodVisitRows) {
+      const visits = foodVisitRows.slice(1).map(([id, placeId, date, time, dishes, rating, cost, who, notes, photo1, photo2], i) => ({
+        id: (id || '').trim() || ('v' + i), placeId: (placeId || '').trim(),
+        date: this.normDate(date), time: this.normTime(time),
+        dishes: dishes || '', rating: Math.max(0, Math.min(5, parseInt(rating, 10) || 0)),
+        cost: cost ? +cost || 0 : 0, who: who || '', notes: notes || '',
+        photos: [photo1, photo2].filter(Boolean),
+      })).filter(v => v.placeId);
+      Store.save('foodVisits', visits);
+    }
+
     const s = this.settings();
     s.lastSync = new Date().toISOString();
     Store.save('settings', s);
@@ -275,14 +325,22 @@ const Sheets = {
   /* 家電那筆資料含照片+附件,動輒上百 KB。以前待送佇列(存在 localStorage)會整包
    * 複製一份,每改一個欄位就多一份,很快把手機約 5MB 的配額塞爆,之後連家電本身都
    * 存不進去。現在家電只記編號,真正送出時再從目前資料重組,同一筆也只留一個。 */
+  /* 美食紀錄也帶照片,同樣只記編號 */
+  REF_ACTIONS: {
+    upsertAppliance: { ref: 'applianceId', key: 'appliances', toRow: a => Sheets.applianceToRow(a) },
+    upsertFoodVisit: { ref: 'foodVisitId', key: 'foodVisits', toRow: v => Sheets.foodVisitToRow(v) },
+  },
+
   pendingEntry(id, action, data) {
-    return action === 'upsertAppliance' ? { id, action, applianceId: data.id } : { id, action, data };
+    const r = this.REF_ACTIONS[action];
+    return r ? { id, action, [r.ref]: data.id } : { id, action, data };
   },
 
   addPending(action, data) {
     let q = Store.load(this.pendingKey, []);
     const id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
-    if (action === 'upsertAppliance') q = q.filter(p => !(p.action === action && p.applianceId === data.id));
+    const r = this.REF_ACTIONS[action];
+    if (r) q = q.filter(p => !(p.action === action && p[r.ref] === data.id));
     q.push(this.pendingEntry(id, action, data));
     Store.save(this.pendingKey, q);
     return id;
@@ -313,10 +371,11 @@ const Sheets = {
     const q = Store.load(this.pendingKey, []);
     for (const p of q) {
       let data = p.data;
-      if (p.applianceId) {
-        const a = Store.load('appliances', []).find(x => x.id === p.applianceId);
-        if (!a) { this.removePending(p.id); continue; } // 已經刪掉了,不用補送
-        data = this.applianceToRow(a);
+      const r = this.REF_ACTIONS[p.action];
+      if (r && p[r.ref]) {
+        const item = Store.load(r.key, []).find(x => x.id === p[r.ref]);
+        if (!item) { this.removePending(p.id); continue; } // 已經刪掉了,不用補送
+        data = r.toRow(item);
       }
       try {
         const json = await this.call(p.action, data);
@@ -360,6 +419,25 @@ const Sheets = {
     return row;
   },
 
+  foodPlaceToRow(p) {
+    const hasLoc = Number.isFinite(p.lat) && Number.isFinite(p.lng);
+    return {
+      id: p.id, name: p.name || '', category: p.category || '',
+      status: this.FOOD_STATUS_ZH[p.status] || this.FOOD_STATUS_ZH.want,
+      wish: p.wish || '', address: p.address || '',
+      coord: hasLoc ? `${p.lat},${p.lng}` : '', url: p.url || '',
+    };
+  },
+
+  foodVisitToRow(v) {
+    const photos = v.photos || [];
+    return {
+      id: v.id, placeId: v.placeId, date: v.date || '', time: v.time || '',
+      dishes: v.dishes || '', rating: v.rating || 0, cost: v.cost || 0,
+      who: v.who || '', notes: v.notes || '', photo1: photos[0] || '', photo2: photos[1] || '',
+    };
+  },
+
   /* 把 reports/<代號>/<日期>.md 的內容鏡像一份到 Google Sheet(分頁「FAMAILY APP - 股票」) */
   async pushReport({ code, date, title, content }) {
     return this.push('upsertReport', { code, date, title, content });
@@ -381,6 +459,8 @@ const Sheets = {
     }
     const stocks = Store.load('stocks', []).map(w => this.stockToRow(w));
     const appliances = Store.load('appliances', []).map(a => this.applianceToRow(a));
-    return this.push('bulk', { shows, logs, stocks, appliances });
+    const foodPlaces = Store.load('foodPlaces', []).map(p => this.foodPlaceToRow(p));
+    const foodVisits = Store.load('foodVisits', []).map(v => this.foodVisitToRow(v));
+    return this.push('bulk', { shows, logs, stocks, appliances, foodPlaces, foodVisits });
   },
 };

@@ -6,6 +6,7 @@ const Modal = {
     const modal = document.getElementById('modal');
     modal.innerHTML = html;
     backdrop.classList.remove('hidden');
+    modal.scrollTop = 0; // 不然會沿用上一個彈窗捲到的位置,一打開就停在半中間
     modal.querySelectorAll('[data-close]').forEach(el =>
       el.addEventListener('click', () => this.close()));
     // 鎖住手機版背景頁面:遮罩雖然是 position:fixed,但 iOS Safari 光靠這個蓋不住底下
@@ -35,6 +36,7 @@ const PAGES = {
   stocks: { title: '台股追蹤', add: () => Stocks.openAdd() },
   shows: { title: '追劇清單', add: () => Shows.openAdd() },
   appliances: { title: '家電清單', add: () => Appliances.openAdd() },
+  food: { title: '美食地圖', add: () => Food.openAdd() },
   knowledge: { title: '知識庫', add: null },
   settings: { title: '設定', add: null },
 };
@@ -53,6 +55,7 @@ function switchPage(page) {
     knowledgeLoaded = true;
     Knowledge.render();
   }
+  if (page === 'food') Food.onShow(); // 每次打開都重新定位,看看是不是人就在哪間店附近
 }
 
 document.querySelectorAll('.tab').forEach(tab =>
@@ -81,6 +84,24 @@ document.getElementById('show-search').addEventListener('input', e => {
 document.getElementById('appliance-search').addEventListener('input', e => {
   Appliances.search = e.target.value;
   Appliances.render();
+});
+
+/* ---------- 美食地圖:地圖/想吃/吃過/紀錄切換、搜尋、定位 ---------- */
+document.querySelectorAll('#food-view button').forEach(btn =>
+  btn.addEventListener('click', () => {
+    Food.view = btn.dataset.view;
+    Food.render();
+    if (Food.view === 'map') Food.ensureMap();
+  }));
+document.getElementById('food-search').addEventListener('input', e => {
+  Food.search = e.target.value;
+  Food.render();
+});
+document.getElementById('food-relocate').addEventListener('click', () => Food.relocate(true));
+document.getElementById('food-locate').addEventListener('click', () => Food.relocate(true));
+// App 從背景切回來(例如走進店裡才打開手機)時,如果停在美食頁就再比對一次附近的店
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && currentPage === 'food') Food.relocate(false);
 });
 
 /* ---------- 設定頁 ---------- */
@@ -129,6 +150,7 @@ async function pullAndRender() {
     Shows.render();
     Stocks.render();
     Appliances.render();
+    Food.render();
     refreshSyncStatus();
     return true;
   } catch {
@@ -163,8 +185,9 @@ document.getElementById('save-script').addEventListener('click', async () => {
   const localShows = Store.load('shows', []);
   const localStocks = Store.load('stocks', []);
   const localAppliances = Store.load('appliances', []);
-  const total = localShows.length + localStocks.length + localAppliances.length;
-  if (total && confirm(`連線成功!要把這支手機現有的 ${localShows.length} 部劇 + ${localStocks.length} 檔股票 + ${localAppliances.length} 項家電上傳到 Google Sheet 嗎?\n(家人的手機第一次啟用時選「取消」就好)`)) {
+  const localFood = Store.load('foodPlaces', []);
+  const total = localShows.length + localStocks.length + localAppliances.length + localFood.length;
+  if (total && confirm(`連線成功!要把這支手機現有的 ${localShows.length} 部劇 + ${localStocks.length} 檔股票 + ${localAppliances.length} 項家電 + ${localFood.length} 間美食店家上傳到 Google Sheet 嗎?\n(家人的手機第一次啟用時選「取消」就好)`)) {
     syncStatus.textContent = '上傳中…';
     await Sheets.bulkUpload();
   }
@@ -191,6 +214,7 @@ document.getElementById('import-file').addEventListener('change', e => {
       Shows.render();
       Stocks.render();
       Appliances.render();
+      Food.render();
       refreshTmdbStatus();
       toast('匯入成功!');
     } else {
@@ -210,5 +234,6 @@ switchPage('stocks');
 Store.init().then(() => {
   Sheets.compactPending();
   Appliances.render();
+  Food.render();
   if (Sheets.enabled()) pullAndRender();   // 再從 Google Sheet 抓最新資料
 });
