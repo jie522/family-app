@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 20; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 21; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '開始追劇日期', '更新時間'];
@@ -42,7 +42,16 @@ var APPLIANCE_HEADERS = (function () {
 // 座標存成「緯度,經度」一格文字,不拆兩欄數字——數字欄會被 Sheets 依顯示格式四捨五入,圖釘會跑掉
 // 家電維修/更換紀錄:一台家電可以有很多筆,用「家電編號」對回家電清單的編號
 var APPLIANCE_REC_TAB = '家電維修紀錄';
-var APPLIANCE_REC_HEADERS = ['編號', '家電編號', '日期', '類型', '內容', '費用', '廠商', '備註', '更新時間'];
+// 每筆紀錄最多 2 張照片,每張拆 APPLIANCE_REC_PHOTO_CHUNKS 格存(單一儲存格上限 5 萬字元);要跟 App 的 Sheets.REC_PHOTO_CHUNKS 同值
+var APPLIANCE_REC_PHOTO_CHUNKS = 4;
+var APPLIANCE_REC_HEADERS = (function () {
+  var headers = ['編號', '家電編號', '日期', '類型', '內容', '費用', '廠商', '備註'];
+  for (var n = 1; n <= 2; n++) {
+    for (var p = 1; p <= APPLIANCE_REC_PHOTO_CHUNKS; p++) headers.push('照片' + n + '-' + p);
+  }
+  headers.push('更新時間');
+  return headers;
+})();
 var FOOD_PLACE_TAB = '美食地圖';
 var FOOD_PLACE_HEADERS = ['編號', '店名', '分類', '狀態', '想吃什麼', '地址', '座標', '連結', '更新時間'];
 var FOOD_VISIT_TAB = '美食紀錄';
@@ -99,7 +108,7 @@ function applianceRecSheet() {
     sh.appendRow(APPLIANCE_REC_HEADERS);
     sh.setFrozenRows(1);
   }
-  sh.getRange('A:H').setNumberFormat('@'); // 全部強制純文字:日期不被轉成日期物件、自由輸入的內容開頭是 = + - 也不會被當公式
+  sh.getRange(1, 1, sh.getMaxRows(), APPLIANCE_REC_HEADERS.length - 1).setNumberFormat('@'); // 全部強制純文字:日期不被轉成日期物件、自由輸入的內容開頭是 = + - 也不會被當公式
   return sh;
 }
 
@@ -323,9 +332,13 @@ function deleteAppliance(d) {
 
 /* ---------- 家電維修/更換紀錄 ---------- */
 function upsertApplianceRecord(d) {
-  upsertById(applianceRecSheet(), APPLIANCE_REC_HEADERS.length, d.id, [
-    d.id || '', d.applianceId || '', d.date || '', d.type || '其他', d.title || '',
-    d.cost || 0, d.vendor || '', d.notes || '', new Date()]);
+  var row = [d.id || '', d.applianceId || '', d.date || '', d.type || '其他', d.title || '',
+             d.cost || 0, d.vendor || '', d.notes || ''];
+  for (var n = 1; n <= 2; n++) {
+    for (var p = 1; p <= APPLIANCE_REC_PHOTO_CHUNKS; p++) row.push(d['photo' + n + '_' + p] || '');
+  }
+  row.push(new Date());
+  upsertById(applianceRecSheet(), APPLIANCE_REC_HEADERS.length, d.id, row);
 }
 
 function deleteApplianceRecord(d) {

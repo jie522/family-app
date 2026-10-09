@@ -25,10 +25,13 @@ const Sheets = {
   ATT_CHUNKS: 10,
   ATT_CHUNK_SIZE: 49000, // 留一點餘裕給 Sheets 真正的 5 萬字元硬限制
 
-  splitAttachment(str) {
+  // 維修紀錄的照片(最多 2 張,每張拆 REC_PHOTO_CHUNKS 格)。Apps Script 的 APPLIANCE_REC_PHOTO_CHUNKS 要同值
+  REC_PHOTO_CHUNKS: 4, MAX_REC_PHOTOS: 2,
+
+  splitAttachment(str, chunks = this.ATT_CHUNKS) {
     const s = str || '';
     const out = [];
-    for (let i = 0; i < this.ATT_CHUNKS; i++) out.push(s.slice(i * this.ATT_CHUNK_SIZE, (i + 1) * this.ATT_CHUNK_SIZE));
+    for (let i = 0; i < chunks; i++) out.push(s.slice(i * this.ATT_CHUNK_SIZE, (i + 1) * this.ATT_CHUNK_SIZE));
     return out;
   },
 
@@ -36,7 +39,7 @@ const Sheets = {
     return (parts || []).join('');
   },
 
-  SCRIPT_VERSION: 20, // 對應 apps-script/Code.gs 的 VERSION;App 需要的最低版本
+  SCRIPT_VERSION: 21, // 對應 apps-script/Code.gs 的 VERSION;App 需要的最低版本
   scriptOld: null,    // 偵測到的舊版版本號(null 代表沒問題或還沒檢查)
 
   /* 每次開啟 App 檢查一次:部署的 Apps Script 比 App 需要的舊,新功能就不會寫進 Sheet,
@@ -330,10 +333,16 @@ const Sheets = {
     // 家電維修/更換紀錄:編號,家電編號,日期,類型,內容,費用,廠商,備註
     const recRows = await this.fetchPairedTab(this.APPLIANCE_REC_TAB, this.APPLIANCE_REC_HEADERS01);
     if (recRows) {
-      save('applianceRecords', recRows.slice(1).map(([id, applianceId, date, type, title, cost, vendor, notes], i) => ({
+      // 第 9 欄起是照片 1-1…2-4;還是沒有照片欄的舊表頭就不讀,免得把更新時間當成照片
+      const hasPhotoCols = recRows[0][8] === '照片1-1';
+      const pc = this.REC_PHOTO_CHUNKS;
+      save('applianceRecords', recRows.slice(1).map(([id, applianceId, date, type, title, cost, vendor, notes, ...rest], i) => ({
         id: (id || '').trim() || ('r' + i), applianceId: (applianceId || '').trim(),
         date: this.normDate(date), type: type || '其他', title: title || '',
         cost: cost ? +cost || 0 : 0, vendor: vendor || '', notes: notes || '',
+        photos: hasPhotoCols
+          ? [0, 1].map(n => this.joinAttachment(rest.slice(n * pc, (n + 1) * pc))).filter(Boolean)
+          : [],
       })).filter(r => r.applianceId));
     }
 
@@ -417,6 +426,7 @@ const Sheets = {
   /* 美食紀錄也帶照片,同樣只記編號 */
   REF_ACTIONS: {
     upsertAppliance: { ref: 'applianceId', key: 'appliances', toRow: a => Sheets.applianceToRow(a) },
+    upsertApplianceRecord: { ref: 'applianceRecordId', key: 'applianceRecords', toRow: r => Sheets.applianceRecordToRow(r) },
     upsertFoodVisit: { ref: 'foodVisitId', key: 'foodVisits', toRow: v => Sheets.foodVisitToRow(v) },
   },
 
@@ -509,10 +519,14 @@ const Sheets = {
   },
 
   applianceRecordToRow(r) {
-    return {
+    const row = {
       id: r.id, applianceId: r.applianceId, date: r.date || '', type: r.type || '其他',
       title: r.title || '', cost: r.cost || 0, vendor: r.vendor || '', notes: r.notes || '',
     };
+    [0, 1].forEach(i => {
+      this.splitAttachment((r.photos || [])[i], this.REC_PHOTO_CHUNKS).forEach((chunk, p) => { row[`photo${i + 1}_${p + 1}`] = chunk; });
+    });
+    return row;
   },
 
   /* 新增類的動作:送出後明確告訴使用者有沒有同步到雲端。

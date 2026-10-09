@@ -31,6 +31,9 @@ const Appliances = {
     return this.records().filter(r => r.applianceId === applianceId)
       .sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id).localeCompare(String(a.id)));
   },
+  /* 維修紀錄照片(收據、維修單、壞掉的零件):保留彩色,預算是 Sheet 的 REC_PHOTO_CHUNKS 格 */
+  recPhotoLimit() { return Math.round(Sheets.REC_PHOTO_CHUNKS * Sheets.ATT_CHUNK_SIZE * 0.85); },
+  recPhotoHardCap() { return Sheets.REC_PHOTO_CHUNKS * Sheets.ATT_CHUNK_SIZE; },
   recordCost(list) { return list.reduce((s, r) => s + (+r.cost || 0), 0); },
 
   /* msg 有給的話(新增類動作),送出後會明確顯示「已同步」或「同步失敗」 */
@@ -585,6 +588,7 @@ const Appliances = {
     recBox.innerHTML = recs.length
       ? `<div class="food-visit-list">${recs.map(r => `
           <button type="button" class="food-visit-item" data-rec="${esc(r.id)}">
+            ${r.photos?.[0] ? `<img src="${esc(r.photos[0])}" alt="">` : ''}
             <div class="food-visit-body">
               <div class="food-visit-date">${this.RECORD_ICONS[r.type] || '📝'} ${esc(r.type)} · ${esc(r.date)}</div>
               <div class="food-visit-text">${esc(r.title)}${r.vendor ? ' · ' + esc(r.vendor) : ''}</div>
@@ -619,6 +623,7 @@ const Appliances = {
     if (!a) return;
     const existing = recordId ? this.records().find(r => r.id === recordId) : null;
     let type = existing ? existing.type : this.RECORD_TYPES[0];
+    const photos = existing ? [...(existing.photos || [])] : [];
 
     Modal.swap(`
       <button class="modal-close" data-close>✕</button>
@@ -636,6 +641,9 @@ const Appliances = {
       <input type="number" id="r-cost" min="0" step="1" placeholder="例:1200(沒花錢留空)" value="${existing && existing.cost ? existing.cost : ''}">
       <label>廠商 / 師傅 / 購買處</label>
       <input type="text" id="r-vendor" placeholder="例:大金服務中心" value="${esc(existing ? existing.vendor : '')}">
+      <label>照片 / 收據(最多 ${Sheets.MAX_REC_PHOTOS} 張,可拍照或從相簿選)</label>
+      <div class="food-photos" id="r-photos"></div>
+      <input type="file" id="r-photo-file" accept="image/*" hidden>
       <label>備註</label>
       <textarea id="r-notes" placeholder="故障狀況、換了什麼型號、保固內免費…">${esc(existing ? existing.notes : '')}</textarea>
       <button class="btn primary block" id="r-save">${existing ? '儲存' : '加入紀錄'}</button>
@@ -650,6 +658,31 @@ const Appliances = {
         document.querySelectorAll('#r-type button').forEach(b => b.classList.toggle('active', b === btn));
       }));
 
+    const photosEl = document.getElementById('r-photos');
+    const renderPhotos = () => {
+      photosEl.innerHTML = photos.map((src, i) => `
+        <div class="food-photo">
+          <img src="${src}" alt="" data-view="${i}">
+          <button type="button" class="food-photo-rm" data-rm="${i}">✕</button>
+        </div>`).join('') +
+        (photos.length < Sheets.MAX_REC_PHOTOS ? '<button type="button" class="food-photo add" id="r-photo-add">📷<span>拍照 / 上傳</span></button>' : '');
+      photosEl.querySelectorAll('[data-view]').forEach(img =>
+        img.addEventListener('click', () => Food.viewPhoto(photos[+img.dataset.view])));
+      photosEl.querySelectorAll('[data-rm]').forEach(btn =>
+        btn.addEventListener('click', () => { photos.splice(+btn.dataset.rm, 1); renderPhotos(); }));
+      document.getElementById('r-photo-add')?.addEventListener('click', () =>
+        document.getElementById('r-photo-file').click());
+    };
+    renderPhotos();
+    document.getElementById('r-photo-file').addEventListener('change', async e => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      const dataUrl = await this.pickAndCompress(file, this.DOC_ATTEMPTS, { limit: this.recPhotoLimit(), hardCap: this.recPhotoHardCap() });
+      if (!dataUrl || photos.length >= Sheets.MAX_REC_PHOTOS) return;
+      photos.push(dataUrl);
+      renderPhotos();
+    });
+
     const back = () => { Modal.close(); this.render(); this.openDetail(a.id); };
 
     document.getElementById('r-save').addEventListener('click', () => {
@@ -663,6 +696,7 @@ const Appliances = {
         cost: +document.getElementById('r-cost').value || 0,
         vendor: document.getElementById('r-vendor').value.trim(),
         notes: document.getElementById('r-notes').value.trim(),
+        photos: [...photos],
       };
       const all = this.records();
       const idx = all.findIndex(r => r.id === rec.id);
