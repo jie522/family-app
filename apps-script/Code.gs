@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 19; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 20; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '開始追劇日期', '更新時間'];
@@ -84,7 +84,10 @@ function applianceSheet() {
     sh.appendRow(APPLIANCE_HEADERS);
     sh.setFrozenRows(1);
   }
-  sh.getRange('A:A').setNumberFormat('@'); // 編號欄強制文字格式
+  // 編號 + 照片/附件拆格/備註 全部強制純文字:附件被切成每格 49000 字元的 base64,
+  // 某一格剛好以 + 或 = 開頭時,Sheets 會當成公式,那一格就壞了、整張附件圖解不出來
+  sh.getRange('A:A').setNumberFormat('@');
+  sh.getRange('K:AP').setNumberFormat('@');
   return sh;
 }
 
@@ -96,7 +99,7 @@ function applianceRecSheet() {
     sh.appendRow(APPLIANCE_REC_HEADERS);
     sh.setFrozenRows(1);
   }
-  sh.getRange('A:D').setNumberFormat('@'); // 編號/家電編號/日期/類型強制文字,不讓 Sheets 轉成日期物件
+  sh.getRange('A:H').setNumberFormat('@'); // 全部強制純文字:日期不被轉成日期物件、自由輸入的內容開頭是 = + - 也不會被當公式
   return sh;
 }
 
@@ -109,7 +112,7 @@ function foodPlaceSheet() {
     sh.setFrozenRows(1);
   }
   sh.getRange('A:A').setNumberFormat('@'); // 編號
-  sh.getRange('G:G').setNumberFormat('@'); // 座標
+  sh.getRange('E:H').setNumberFormat('@'); // 想吃什麼/地址/座標/連結:使用者自由輸入,開頭是 = + - 會被當公式
   return sh;
 }
 
@@ -122,7 +125,7 @@ function foodVisitSheet() {
     sh.setFrozenRows(1);
   }
   // 編號/店家編號/日期/時間都強制文字,不讓 Sheets 自作主張轉成日期、時間物件
-  sh.getRange('A:D').setNumberFormat('@');
+  sh.getRange('A:K').setNumberFormat('@'); // 含心得與兩張照片(base64)
   return sh;
 }
 

@@ -144,6 +144,8 @@ function refreshSyncStatus() {
     scriptInput.value = Sheets.scriptUrl();
     const t = s.lastSync ? new Date(s.lastSync).toLocaleString('zh-TW') : '尚未同步';
     syncStatus.textContent = `✅ 同步已啟用,上次讀取:${t}`;
+    if (Sheets.scriptOld != null) syncStatus.textContent += `
+⚠️ Apps Script 是舊版 v${Sheets.scriptOld},需要 v${Sheets.SCRIPT_VERSION}:新功能(家電附件/維修紀錄/美食地圖)不會寫進 Sheet,請重新部署`;
   } else {
     syncStatus.textContent = '尚未啟用,目前資料只存在這支手機';
   }
@@ -153,6 +155,8 @@ async function pullAndRender(quiet) {
   try {
     await Sheets.flushPending(); // 先補送上次來不及送出的變更,免得等一下被 pull() 的舊資料蓋掉
     await Sheets.pull();
+    await Sheets.checkVersion(); // 部署的 Apps Script 太舊的話,在狀態列明講,不要讓使用者只看到莫名其妙的同步失敗
+    if (!quiet && Sheets.heldKeys().size) toast('⚠️ 有變更還沒同步成功,這些資料先保留手機上的版本,沒有被覆蓋');
     Shows.render();
     Stocks.render();
     Appliances.render();
@@ -213,6 +217,13 @@ document.getElementById('save-script').addEventListener('click', async () => {
   await pullAndRender();
   refreshTmdbStatus();
   toast('✅ 同步已啟用');
+});
+
+document.getElementById('sync-diag').addEventListener('click', async () => {
+  const box = document.getElementById('sync-diag-result');
+  box.textContent = '檢查中…';
+  const lines = await Sheets.diagnose();
+  box.innerHTML = lines.map(esc).join('<br>');
 });
 
 document.getElementById('sync-now').addEventListener('click', async () => {

@@ -36,6 +36,50 @@ const Sheets = {
     return (parts || []).join('');
   },
 
+  SCRIPT_VERSION: 20, // 對應 apps-script/Code.gs 的 VERSION;App 需要的最低版本
+  scriptOld: null,    // 偵測到的舊版版本號(null 代表沒問題或還沒檢查)
+
+  /* 每次開啟 App 檢查一次:部署的 Apps Script 比 App 需要的舊,新功能就不會寫進 Sheet,
+   * 而且舊版只會回「不認得動作」,使用者只看到莫名其妙的同步失敗 */
+  async checkVersion() {
+    if (this._verChecked || !this.enabled()) return;
+    this._verChecked = true;
+    try {
+      const r = await this.call('ping', {});
+      const v = r && r.v != null ? +r.v : 0;
+      this.scriptOld = v < this.SCRIPT_VERSION ? v : null;
+      if (this.scriptOld != null) toast(`⚠️ Apps Script 是舊版 v${v}(需要 v${this.SCRIPT_VERSION}),請重新部署`);
+    } catch { this._verChecked = false; /* 連不上就下次再檢查 */ }
+  },
+
+  /* 設定頁「檢查同步狀態」:把可能出錯的地方一項一項列出來 */
+  async diagnose() {
+    if (!this.enabled()) return ['尚未貼上 Apps Script 網址,資料只存在這支手機'];
+    const lines = [];
+    let ping;
+    try { ping = await this.call('ping', {}); }
+    catch (e) { return ['❌ 連不上 Apps Script:' + String((e && e.message) || e) + '(請確認網址正確,且部署時「誰可以存取」選「所有人」)']; }
+    const v = ping && ping.v != null ? +ping.v : 0;
+    lines.push(v >= this.SCRIPT_VERSION ? `✅ Apps Script v${v}(最新)`
+      : `❌ Apps Script 是 v${v || '?(很舊)'},App 需要 v${this.SCRIPT_VERSION}:請把 apps-script/Code.gs 整份貼上,再「部署 → 管理部署作業 → 編輯 → 版本選新版本」`);
+    const tabs = [
+      ['劇集庫', () => this.fetchNamedTab(this.SHOW_TAB, this.SHOW_HEADER0)],
+      ['股票追蹤', () => this.fetchNamedTab(this.STOCK_TAB, this.STOCK_HEADER0)],
+      ['家電清單', () => this.fetchPairedTab(this.APPLIANCE_TAB, [this.APPLIANCE_HEADER0, '品名'])],
+      ['家電維修紀錄', () => this.fetchPairedTab(this.APPLIANCE_REC_TAB, this.APPLIANCE_REC_HEADERS01)],
+      ['美食地圖', () => this.fetchPairedTab(this.FOOD_PLACE_TAB, this.FOOD_PLACE_HEADERS01)],
+      ['美食紀錄', () => this.fetchPairedTab(this.FOOD_VISIT_TAB, this.FOOD_VISIT_HEADERS01)],
+    ];
+    for (const [name, fn] of tabs) {
+      let rows = null;
+      try { rows = await fn(); } catch { rows = null; }
+      lines.push(rows ? `✅ 分頁「${name}」存在,${rows.length - 1} 列` : `⚠️ 分頁「${name}」還沒建立(第一次成功寫入時會自動建立)`);
+    }
+    const q = Store.load(this.pendingKey, []);
+    lines.push(q.length ? `⚠️ 有 ${q.length} 筆變更還沒送上去:${[...new Set(q.map(p => p.action))].join('、')}${this.lastError ? '(最近一次錯誤:' + this.lastError + ')' : ''}` : '✅ 沒有待送出的變更');
+    return lines;
+  },
+
   settings() { return Store.load('settings', {}); },
   scriptUrl() { return (this.settings().scriptUrl || '').trim(); },
   enabled() { return !!this.scriptUrl(); },
@@ -119,6 +163,10 @@ const Sheets = {
 
   /* 從 Sheet 拉全部資料,組成 App 的劇清單/股票清單並存入本機快取 */
   async pull() {
+    // ⚠️ 還有變更沒送成功的資料集(例如 Apps Script 是舊版、不認得新動作),不能用 Sheet 上的舊版整批覆蓋——
+    // 不然手機上剛存的東西(附件、紀錄…)會在下一次同步時憑空消失。這些資料集先保留手機上的版本。
+    const hold = this.heldKeys();
+    const save = (key, value) => { if (!hold.has(key)) Store.save(key, value); };
     // 劇集庫分頁(可能還沒建立;null 代表分頁不存在)
     let showRows = null;
     try { showRows = await this.fetchNamedTab(this.SHOW_TAB, this.SHOW_HEADER0); }
@@ -196,7 +244,7 @@ const Sheets = {
     });
 
     const list = [...shows.values()];
-    Store.save('shows', list);
+    save('shows', list);
 
     // 股票追蹤:代號,名稱,筆記
     let stocks = null;
@@ -212,7 +260,7 @@ const Sheets = {
       const kept = prevList.filter(w => incomingMap.has(w.code)).map(w => incomingMap.get(w.code));
       const added = incoming.filter(w => !prevCodes.has(w.code));
       stocks = [...kept, ...added];
-      Store.save('stocks', stocks);
+      save('stocks', stocks);
     }
 
     // 家電清單:編號,品名,品牌,分類,型號,購買日期,價格,保固期間,採購地點,參考網址,照片,
@@ -247,7 +295,7 @@ const Sheets = {
           };
         })
         .filter(a => a.name);
-      Store.save('appliances', appliances);
+      save('appliances', appliances);
     }
 
     // 美食地圖:編號,店名,分類,狀態,想吃什麼,地址,座標(「緯度,經度」一格文字),連結
@@ -265,7 +313,7 @@ const Sheets = {
           url: url || '', addedAt: i + 1,
         };
       }).filter(p => p.name);
-      Store.save('foodPlaces', places);
+      save('foodPlaces', places);
     }
     // 美食紀錄:編號,店家編號,日期,時間,吃了什麼,評分,花費,跟誰,心得,照片1,照片2
     const foodVisitRows = await this.fetchPairedTab(this.FOOD_VISIT_TAB, this.FOOD_VISIT_HEADERS01);
@@ -277,12 +325,12 @@ const Sheets = {
         cost: cost ? +cost || 0 : 0, who: who || '', notes: notes || '',
         photos: [photo1, photo2].filter(Boolean),
       })).filter(v => v.placeId);
-      Store.save('foodVisits', visits);
+      save('foodVisits', visits);
     }
     // 家電維修/更換紀錄:編號,家電編號,日期,類型,內容,費用,廠商,備註
     const recRows = await this.fetchPairedTab(this.APPLIANCE_REC_TAB, this.APPLIANCE_REC_HEADERS01);
     if (recRows) {
-      Store.save('applianceRecords', recRows.slice(1).map(([id, applianceId, date, type, title, cost, vendor, notes], i) => ({
+      save('applianceRecords', recRows.slice(1).map(([id, applianceId, date, type, title, cost, vendor, notes], i) => ({
         id: (id || '').trim() || ('r' + i), applianceId: (applianceId || '').trim(),
         date: this.normDate(date), type: type || '其他', title: title || '',
         cost: cost ? +cost || 0 : 0, vendor: vendor || '', notes: notes || '',
@@ -309,7 +357,33 @@ const Sheets = {
       headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 避免 preflight
       body: JSON.stringify({ action, data }),
     });
-    return res.json();
+    const json = await res.json();
+    if (!json.ok && action !== 'ping') this.lastError = json.error || 'unknown';
+    return json;
+  },
+
+  lastError: '',
+
+  PENDING_KEY_OF: {
+    upsertShow: 'shows', deleteShow: 'shows', addLog: 'shows', deleteLog: 'shows',
+    upsertStock: 'stocks', deleteStock: 'stocks',
+    upsertAppliance: 'appliances', deleteAppliance: 'appliances',
+    upsertApplianceRecord: 'applianceRecords', deleteApplianceRecord: 'applianceRecords',
+    upsertFoodPlace: 'foodPlaces', deleteFoodPlace: 'foodPlaces',
+    upsertFoodVisit: 'foodVisits', deleteFoodVisit: 'foodVisits',
+  },
+
+  /* 待送佇列裡還有變更的資料集 */
+  heldKeys() {
+    const keys = new Set();
+    for (const p of Store.load(this.pendingKey, [])) {
+      if (p.action === 'bulk') ['shows', 'stocks', 'appliances', 'applianceRecords', 'foodPlaces', 'foodVisits'].forEach(k => keys.add(k));
+      const k = this.PENDING_KEY_OF[p.action];
+      if (k) keys.add(k);
+      if (p.action === 'deleteAppliance') keys.add('applianceRecords'); // 刪家電會連動刪紀錄
+      if (p.action === 'deleteFoodPlace') keys.add('foodVisits');       // 刪店家會連動刪紀錄
+    }
+    return keys;
   },
 
   /* 單純的寫入動作(新增/刪除/筆記…),只在乎成不成功。
@@ -321,13 +395,18 @@ const Sheets = {
   async push(action, data) {
     if (!this.scriptUrl()) return false;
     const id = this.addPending(action, data);
-    try {
-      const json = await this.call(action, data);
-      if (json.ok) this.removePending(id);
-      return !!json.ok;
-    } catch {
-      return false; // 留在待送出佇列裡,下次 flushPending() 會重試
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const json = await this.call(action, data);
+        if (json.ok) { this.removePending(id); this.lastError = ''; return true; }
+        return false; // 伺服器明確拒絕(例如舊版 Apps Script 不認得這個動作),重試沒用
+      } catch (e) {
+        // 網路/傳輸層失敗(行動網路切換、大檔上傳被中斷…)偶爾會發生,等一下再試一次
+        this.lastError = 'NETWORK:' + String((e && e.message) || e).slice(0, 60);
+        if (attempt === 0) await new Promise(r => setTimeout(r, 1500));
+      }
     }
+    return false; // 留在待送出佇列裡,下次 flushPending() 會重試
   },
 
   pendingKey: 'pendingSync',
@@ -442,7 +521,10 @@ const Sheets = {
     if (!this.enabled()) { toast(`${msg}(尚未啟用同步,只存在這支手機)`); return; }
     toast(`${msg},同步中…`);
     const ok = await this.push(action, data);
-    toast(ok ? `${msg} ☁️ 已同步` : `${msg},但同步失敗,會在下次開啟時自動重送`);
+    if (ok) { toast(`${msg} ☁️ 已同步`); return; }
+    const why = this.lastError === 'unknown action' ? 'Apps Script 是舊版,不認得這個動作,請重新部署'
+      : this.lastError.startsWith('NETWORK:') ? '網路連線失敗,會自動重送' : '會在下次開啟時自動重送';
+    toast(`${msg},但同步失敗:${why}`);
   },
 
   foodPlaceToRow(p) {
