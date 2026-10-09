@@ -17,6 +17,12 @@ const Modal = {
     document.body.style.top = `-${this.scrollY}px`;
     document.body.style.width = '100%';
   },
+  /* 從一個彈窗換到另一個彈窗:先關再開,不然 open() 會把「已經被鎖住的 body」
+     當成捲動位置 0 記下來,關掉後頁面跳回最上面 */
+  swap(html) {
+    if (!document.getElementById('modal-backdrop').classList.contains('hidden')) this.close();
+    this.open(html);
+  },
   close() {
     document.getElementById('modal-backdrop').classList.add('hidden');
     document.getElementById('modal').innerHTML = '';
@@ -143,7 +149,7 @@ function refreshSyncStatus() {
   }
 }
 
-async function pullAndRender() {
+async function pullAndRender(quiet) {
   try {
     await Sheets.flushPending(); // 先補送上次來不及送出的變更,免得等一下被 pull() 的舊資料蓋掉
     await Sheets.pull();
@@ -154,10 +160,23 @@ async function pullAndRender() {
     refreshSyncStatus();
     return true;
   } catch {
-    toast('⚠️ 讀取 Google Sheet 失敗,顯示手機上的資料');
+    if (!quiet) toast('⚠️ 讀取 Google Sheet 失敗,顯示手機上的資料');
     return false;
   }
 }
+
+/* App 從背景切回來時自動重抓一次 Sheet:家人在別支手機新增的店、維修紀錄就會自己出現,
+ * 不用每次都跑去設定頁按「立即同步」。重抓前會先補送這支手機還沒送出的變更。
+ * 有彈窗開著(正在編輯)就先不抓——pull 會把本機清單整批換成 Sheet 的版本,
+ * 彈窗裡拿著的是舊資料,存檔時會把剛抓下來的蓋回去。 */
+let lastAutoPull = Date.now(), autoPulling = false;
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden || !Sheets.enabled() || autoPulling) return;
+  if (Date.now() - lastAutoPull < 30000) return;
+  if (!document.getElementById('modal-backdrop').classList.contains('hidden')) return;
+  autoPulling = true;
+  try { await pullAndRender(true); } finally { lastAutoPull = Date.now(); autoPulling = false; }
+});
 
 document.getElementById('save-script').addEventListener('click', async () => {
   const url = scriptInput.value.trim();

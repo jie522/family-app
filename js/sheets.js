@@ -17,6 +17,7 @@ const Sheets = {
   FOOD_PLACE_TAB: '美食地圖', FOOD_PLACE_HEADERS01: ['編號', '店名'],
   FOOD_VISIT_TAB: '美食紀錄', FOOD_VISIT_HEADERS01: ['編號', '店家編號'],
   FOOD_STATUS_ZH: { want: '想吃', been: '吃過' },
+  APPLIANCE_REC_TAB: '家電維修紀錄', APPLIANCE_REC_HEADERS01: ['編號', '家電編號'],
 
   // 附件(收據/保固卡等文件照)常常壓縮完還是超過 Sheet 單一儲存格 5 萬字元上限,
   // 不夠塞就沒辦法看清楚小字——所以每個附件拆成好幾格存,合起來的預算才夠留住解析度。
@@ -110,7 +111,7 @@ const Sheets = {
     return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
   },
 
-  async fetchFoodTab(tabName, headers01) {
+  async fetchPairedTab(tabName, headers01) {
     let rows = null;
     try { rows = await this.fetchNamedTab(tabName, headers01[0]); } catch { rows = null; }
     return rows && rows[0][1] === headers01[1] ? rows : null;
@@ -251,7 +252,7 @@ const Sheets = {
 
     // 美食地圖:編號,店名,分類,狀態,想吃什麼,地址,座標(「緯度,經度」一格文字),連結
     // 分頁還沒建立(Apps Script 還沒更新到有美食地圖的版本)就保留手機本機資料
-    const foodPlaceRows = await this.fetchFoodTab(this.FOOD_PLACE_TAB, this.FOOD_PLACE_HEADERS01);
+    const foodPlaceRows = await this.fetchPairedTab(this.FOOD_PLACE_TAB, this.FOOD_PLACE_HEADERS01);
     if (foodPlaceRows) {
       const places = foodPlaceRows.slice(1).map(([id, name, category, statusZh, wish, address, coord, url], i) => {
         const [lat, lng] = String(coord || '').split(',').map(v => parseFloat(v));
@@ -267,7 +268,7 @@ const Sheets = {
       Store.save('foodPlaces', places);
     }
     // 美食紀錄:編號,店家編號,日期,時間,吃了什麼,評分,花費,跟誰,心得,照片1,照片2
-    const foodVisitRows = await this.fetchFoodTab(this.FOOD_VISIT_TAB, this.FOOD_VISIT_HEADERS01);
+    const foodVisitRows = await this.fetchPairedTab(this.FOOD_VISIT_TAB, this.FOOD_VISIT_HEADERS01);
     if (foodVisitRows) {
       const visits = foodVisitRows.slice(1).map(([id, placeId, date, time, dishes, rating, cost, who, notes, photo1, photo2], i) => ({
         id: (id || '').trim() || ('v' + i), placeId: (placeId || '').trim(),
@@ -277,6 +278,15 @@ const Sheets = {
         photos: [photo1, photo2].filter(Boolean),
       })).filter(v => v.placeId);
       Store.save('foodVisits', visits);
+    }
+    // 家電維修/更換紀錄:編號,家電編號,日期,類型,內容,費用,廠商,備註
+    const recRows = await this.fetchPairedTab(this.APPLIANCE_REC_TAB, this.APPLIANCE_REC_HEADERS01);
+    if (recRows) {
+      Store.save('applianceRecords', recRows.slice(1).map(([id, applianceId, date, type, title, cost, vendor, notes], i) => ({
+        id: (id || '').trim() || ('r' + i), applianceId: (applianceId || '').trim(),
+        date: this.normDate(date), type: type || '其他', title: title || '',
+        cost: cost ? +cost || 0 : 0, vendor: vendor || '', notes: notes || '',
+      })).filter(r => r.applianceId));
     }
 
     const s = this.settings();
@@ -419,6 +429,22 @@ const Sheets = {
     return row;
   },
 
+  applianceRecordToRow(r) {
+    return {
+      id: r.id, applianceId: r.applianceId, date: r.date || '', type: r.type || '其他',
+      title: r.title || '', cost: r.cost || 0, vendor: r.vendor || '', notes: r.notes || '',
+    };
+  },
+
+  /* 新增類的動作:送出後明確告訴使用者有沒有同步到雲端。
+   * 以前成功時完全沒有任何提示,使用者分不出「有同步」還是「只存在手機」。 */
+  async pushNotify(action, data, msg) {
+    if (!this.enabled()) { toast(`${msg}(尚未啟用同步,只存在這支手機)`); return; }
+    toast(`${msg},同步中…`);
+    const ok = await this.push(action, data);
+    toast(ok ? `${msg} ☁️ 已同步` : `${msg},但同步失敗,會在下次開啟時自動重送`);
+  },
+
   foodPlaceToRow(p) {
     const hasLoc = Number.isFinite(p.lat) && Number.isFinite(p.lng);
     return {
@@ -461,6 +487,7 @@ const Sheets = {
     const appliances = Store.load('appliances', []).map(a => this.applianceToRow(a));
     const foodPlaces = Store.load('foodPlaces', []).map(p => this.foodPlaceToRow(p));
     const foodVisits = Store.load('foodVisits', []).map(v => this.foodVisitToRow(v));
-    return this.push('bulk', { shows, logs, stocks, appliances, foodPlaces, foodVisits });
+    const applianceRecords = Store.load('applianceRecords', []).map(r => this.applianceRecordToRow(r));
+    return this.push('bulk', { shows, logs, stocks, appliances, foodPlaces, foodVisits, applianceRecords });
   },
 };

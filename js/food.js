@@ -29,7 +29,9 @@ const Food = {
   savePlaces(list) { Store.save('foodPlaces', list); },
   saveVisits(list) { Store.save('foodVisits', list); },
 
-  sync(action, data) {
+  /* msg 有給的話(新增類動作),送出後會明確顯示「已同步」或「同步失敗」 */
+  sync(action, data, msg) {
+    if (msg) { Sheets.pushNotify(action, data, msg); return; }
     if (!Sheets.enabled()) return;
     Sheets.push(action, data).then(ok => {
       if (!ok) toast('⚠️ 同步到 Google Sheet 失敗,資料先存在手機');
@@ -623,11 +625,10 @@ const Food = {
     const p = { id: 'f' + Date.now(), status: 'want', ...item, addedAt: Date.now() };
     list.push(p);
     this.savePlaces(list);
-    this.sync('upsertFoodPlace', Sheets.foodPlaceToRow(p));
     this.render();
-    if (thenLog) { this.openVisit(p.id, null, false); return; }
+    if (thenLog) { this.sync('upsertFoodPlace', Sheets.foodPlaceToRow(p)); this.openVisit(p.id, null, false); return; }
     Modal.close();
-    toast(`已加入「${p.name}」`);
+    this.sync('upsertFoodPlace', Sheets.foodPlaceToRow(p), `已加入「${p.name}」`);
   },
 
   /* ---------- 店家詳情 ---------- */
@@ -847,8 +848,6 @@ const Food = {
       const idx = visits.findIndex(x => x.id === rec.id);
       if (idx >= 0) visits[idx] = rec; else visits.push(rec);
       this.saveVisits(visits);
-      this.sync('upsertFoodVisit', Sheets.foodVisitToRow(rec));
-
       let msg = existing ? '已儲存' : '已記錄這一餐 😋';
       if (!existing && p.status !== 'been') {
         // 吃過了就從「想吃」移到「吃過」;還想再去的話,到店家詳情把狀態切回「想吃」就好
@@ -862,7 +861,7 @@ const Food = {
         }
       }
       done();
-      toast(msg);
+      this.sync('upsertFoodVisit', Sheets.foodVisitToRow(rec), msg);
     });
 
     document.getElementById('v-delete')?.addEventListener('click', () => {

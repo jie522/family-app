@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 18; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 19; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '開始追劇日期', '更新時間'];
@@ -40,6 +40,9 @@ var APPLIANCE_HEADERS = (function () {
 })();
 // 美食地圖:店家清單 + 吃過的紀錄(一間店可以有很多筆紀錄,用「店家編號」對回去)
 // 座標存成「緯度,經度」一格文字,不拆兩欄數字——數字欄會被 Sheets 依顯示格式四捨五入,圖釘會跑掉
+// 家電維修/更換紀錄:一台家電可以有很多筆,用「家電編號」對回家電清單的編號
+var APPLIANCE_REC_TAB = '家電維修紀錄';
+var APPLIANCE_REC_HEADERS = ['編號', '家電編號', '日期', '類型', '內容', '費用', '廠商', '備註', '更新時間'];
 var FOOD_PLACE_TAB = '美食地圖';
 var FOOD_PLACE_HEADERS = ['編號', '店名', '分類', '狀態', '想吃什麼', '地址', '座標', '連結', '更新時間'];
 var FOOD_VISIT_TAB = '美食紀錄';
@@ -82,6 +85,18 @@ function applianceSheet() {
     sh.setFrozenRows(1);
   }
   sh.getRange('A:A').setNumberFormat('@'); // 編號欄強制文字格式
+  return sh;
+}
+
+function applianceRecSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(APPLIANCE_REC_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(APPLIANCE_REC_TAB);
+    sh.appendRow(APPLIANCE_REC_HEADERS);
+    sh.setFrozenRows(1);
+  }
+  sh.getRange('A:D').setNumberFormat('@'); // 編號/家電編號/日期/類型強制文字,不讓 Sheets 轉成日期物件
   return sh;
 }
 
@@ -155,6 +170,8 @@ function handle(action, d) {
     case 'deleteStock': deleteStock(d); return { ok: true };
     case 'upsertAppliance': upsertAppliance(d); return { ok: true };
     case 'deleteAppliance': deleteAppliance(d); return { ok: true };
+    case 'upsertApplianceRecord': upsertApplianceRecord(d); return { ok: true };
+    case 'deleteApplianceRecord': deleteApplianceRecord(d); return { ok: true };
     case 'upsertFoodPlace': upsertFoodPlace(d); return { ok: true };
     case 'deleteFoodPlace': deleteFoodPlace(d); return { ok: true };
     case 'upsertFoodVisit': upsertFoodVisit(d); return { ok: true };
@@ -293,11 +310,23 @@ function upsertAppliance(d) {
 
 function deleteAppliance(d) {
   var id = String(d.id).trim();
+  deleteWhere(applianceRecSheet(), 1, id); // 這台家電的維修紀錄一起刪,不然留著也對不到家電
   var sh = applianceSheet();
   var rows = sh.getDataRange().getValues();
   for (var i = rows.length - 1; i >= 1; i--) {
     if (String(rows[i][0]).trim() === id) sh.deleteRow(i + 1);
   }
+}
+
+/* ---------- 家電維修/更換紀錄 ---------- */
+function upsertApplianceRecord(d) {
+  upsertById(applianceRecSheet(), APPLIANCE_REC_HEADERS.length, d.id, [
+    d.id || '', d.applianceId || '', d.date || '', d.type || '其他', d.title || '',
+    d.cost || 0, d.vendor || '', d.notes || '', new Date()]);
+}
+
+function deleteApplianceRecord(d) {
+  deleteWhere(applianceRecSheet(), 0, d.id);
 }
 
 /* ---------- 美食地圖 ---------- */
@@ -531,6 +560,7 @@ function bulk(d) {
   });
   (d.stocks || []).forEach(function (s) { upsertStock(s); });
   (d.appliances || []).forEach(function (a) { upsertAppliance(a); });
+  (d.applianceRecords || []).forEach(function (r) { upsertApplianceRecord(r); });
   (d.foodPlaces || []).forEach(function (p) { upsertFoodPlace(p); });
   (d.foodVisits || []).forEach(function (v) { upsertFoodVisit(v); });
 }

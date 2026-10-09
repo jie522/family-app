@@ -22,7 +22,20 @@ const Appliances = {
   list() { return Store.load('appliances', []); },
   saveList(list) { Store.save('appliances', list); },
 
-  sync(action, data) {
+  /* ---------- 維修 / 更換紀錄(一台家電可以有很多筆,另存一份、用 applianceId 對回家電) ---------- */
+  RECORD_TYPES: ['維修', '更換', '保養清潔', '其他'],
+  RECORD_ICONS: { '維修': '🔧', '更換': '🔁', '保養清潔': '🧽', '其他': '📝' },
+  records() { return Store.load('applianceRecords', []); },
+  saveRecords(list) { Store.save('applianceRecords', list); },
+  recordsOf(applianceId) {
+    return this.records().filter(r => r.applianceId === applianceId)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id).localeCompare(String(a.id)));
+  },
+  recordCost(list) { return list.reduce((s, r) => s + (+r.cost || 0), 0); },
+
+  /* msg 有給的話(新增類動作),送出後會明確顯示「已同步」或「同步失敗」 */
+  sync(action, data, msg) {
+    if (msg) { Sheets.pushNotify(action, data, msg); return; }
     if (!Sheets.enabled()) return;
     Sheets.push(action, data).then(ok => {
       if (!ok) toast('⚠️ 同步到 Google Sheet 失敗,資料先存在手機');
@@ -173,6 +186,8 @@ const Appliances = {
       ? '還沒有登錄家電喔!<br>按右上角「＋」新增第一項'
       : q ? `找不到符合「${esc(this.search.trim())}」的家電`
       : '還沒有登錄家電喔!<br>按右上角「＋」新增第一項';
+    const recCount = {};
+    this.records().forEach(r => { recCount[r.applianceId] = (recCount[r.applianceId] || 0) + 1; });
     listEl.innerHTML = list.map(a => {
       const photo = a.photo
         ? `<img class="appliance-row-photo" src="${esc(a.photo)}" alt="" loading="lazy">`
@@ -187,7 +202,7 @@ const Appliances = {
           <div class="appliance-row-title">${esc(a.name)}</div>
           <div class="appliance-row-sub">${statusChip}</div>
           ${sub ? `<div class="appliance-row-sub">${sub}</div>` : ''}
-          ${a.purchaseDate ? `<div class="appliance-row-sub"><span class="chip">📅 ${esc(a.purchaseDate)}</span></div>` : ''}
+          ${a.purchaseDate || recCount[a.id] ? `<div class="appliance-row-sub">${a.purchaseDate ? `<span class="chip">📅 ${esc(a.purchaseDate)}</span>` : ''}${recCount[a.id] ? ` <span class="chip">🔧 ${recCount[a.id]} 筆紀錄</span>` : ''}</div>` : ''}
         </div>
         <div class="appliance-row-right">
           ${a.price ? `<div class="appliance-row-price">${esc(this.fmtPrice(a.price))}</div>` : ''}
@@ -362,10 +377,9 @@ const Appliances = {
     };
     list.push(a);
     this.saveList(list);
-    this.sync('upsertAppliance', Sheets.applianceToRow(a));
     Modal.close();
     this.render();
-    toast(`已加入「${a.name}」`);
+    this.sync('upsertAppliance', Sheets.applianceToRow(a), `已加入「${a.name}」`);
   },
 
   /* ---------- 詳情 ---------- */
@@ -427,6 +441,9 @@ const Appliances = {
       ${a.url ? `<p class="hint"><a href="${esc(a.url)}" target="_blank" rel="noopener">🔗 開啟連結</a></p>` : ''}
       <label>附件(收據、保固卡、說明書等)</label>
       <div id="d-attachments"></div>
+      <label>維修 / 更換紀錄</label>
+      <div id="d-records"></div>
+      <button type="button" class="btn block" id="d-rec-add">＋ 新增維修 / 更換紀錄</button>
       <label>備註</label>
       <textarea id="d-notes" placeholder="安裝師傅、注意事項…">${esc(a.notes)}</textarea>
 
@@ -562,6 +579,24 @@ const Appliances = {
     };
     renderAttachments();
 
+    // 維修 / 更換紀錄
+    const recs = this.recordsOf(a.id);
+    const recBox = document.getElementById('d-records');
+    recBox.innerHTML = recs.length
+      ? `<div class="food-visit-list">${recs.map(r => `
+          <button type="button" class="food-visit-item" data-rec="${esc(r.id)}">
+            <div class="food-visit-body">
+              <div class="food-visit-date">${this.RECORD_ICONS[r.type] || '📝'} ${esc(r.type)} · ${esc(r.date)}</div>
+              <div class="food-visit-text">${esc(r.title)}${r.vendor ? ' · ' + esc(r.vendor) : ''}</div>
+            </div>
+            ${r.cost ? `<span class="food-cost">${esc(this.fmtPrice(r.cost))}</span>` : ''}
+          </button>`).join('')}</div>
+        ${this.recordCost(recs) ? `<p class="food-loc-status">維修/更換累計花費 ${esc(this.fmtPrice(this.recordCost(recs)))}</p>` : ''}`
+      : '<p class="food-loc-status">還沒有紀錄。壞掉送修、換濾網/電池/零件、定期保養都可以記在這裡</p>';
+    recBox.querySelectorAll('[data-rec]').forEach(btn =>
+      btn.addEventListener('click', () => this.openRecord(a.id, btn.dataset.rec)));
+    document.getElementById('d-rec-add').addEventListener('click', () => this.openRecord(a.id, null));
+
     // 刪除
     document.getElementById('d-delete').addEventListener('click', () => {
       const warn = Sheets.enabled()
@@ -570,10 +605,79 @@ const Appliances = {
       if (!confirm(warn)) return;
       const idx = list.indexOf(a);
       list.splice(idx, 1);
+      this.saveRecords(this.records().filter(r => r.applianceId !== a.id)); // 維修紀錄跟著刪(Sheet 端的 deleteAppliance 也會一併刪)
       save();
       this.sync('deleteAppliance', { id: a.id });
       Modal.close();
       toast('已移除');
+    });
+  },
+
+  /* ---------- 新增 / 編輯維修、更換紀錄 ---------- */
+  openRecord(applianceId, recordId) {
+    const a = this.list().find(x => x.id === applianceId);
+    if (!a) return;
+    const existing = recordId ? this.records().find(r => r.id === recordId) : null;
+    let type = existing ? existing.type : this.RECORD_TYPES[0];
+
+    Modal.swap(`
+      <button class="modal-close" data-close>✕</button>
+      <h2>${existing ? '編輯紀錄' : '新增紀錄'}</h2>
+      <p class="food-loc-status" style="margin:-8px 0 4px">${esc(a.name)}</p>
+      <label>類型</label>
+      <div class="status-picker" id="r-type">
+        ${this.RECORD_TYPES.map(t => `<button type="button" data-t="${esc(t)}" class="${t === type ? 'active' : ''}">${esc(t)}</button>`).join('')}
+      </div>
+      <label>日期</label>
+      <input type="date" id="r-date" value="${esc(existing ? existing.date : todayStr())}">
+      <label>內容 *</label>
+      <input type="text" id="r-title" placeholder="例:壓縮機異音送修、更換濾網" value="${esc(existing ? existing.title : '')}">
+      <label>費用</label>
+      <input type="number" id="r-cost" min="0" step="1" placeholder="例:1200(沒花錢留空)" value="${existing && existing.cost ? existing.cost : ''}">
+      <label>廠商 / 師傅 / 購買處</label>
+      <input type="text" id="r-vendor" placeholder="例:大金服務中心" value="${esc(existing ? existing.vendor : '')}">
+      <label>備註</label>
+      <textarea id="r-notes" placeholder="故障狀況、換了什麼型號、保固內免費…">${esc(existing ? existing.notes : '')}</textarea>
+      <button class="btn primary block" id="r-save">${existing ? '儲存' : '加入紀錄'}</button>
+      ${existing ? '<button class="btn danger block" id="r-delete">刪除這筆紀錄</button>' : ''}
+    `);
+
+    bindAutocomplete(document.getElementById('r-vendor'), () =>
+      [...new Set(this.records().map(r => (r.vendor || '').trim()).filter(Boolean))].sort((x, y) => x.localeCompare(y, 'zh-TW')));
+    document.querySelectorAll('#r-type button').forEach(btn =>
+      btn.addEventListener('click', () => {
+        type = btn.dataset.t;
+        document.querySelectorAll('#r-type button').forEach(b => b.classList.toggle('active', b === btn));
+      }));
+
+    const back = () => { Modal.close(); this.render(); this.openDetail(a.id); };
+
+    document.getElementById('r-save').addEventListener('click', () => {
+      const title = document.getElementById('r-title').value.trim();
+      if (!title) { toast('請輸入內容'); return; }
+      const rec = {
+        id: existing ? existing.id : 'r' + Date.now(),
+        applianceId: a.id, type,
+        date: document.getElementById('r-date').value || todayStr(),
+        title,
+        cost: +document.getElementById('r-cost').value || 0,
+        vendor: document.getElementById('r-vendor').value.trim(),
+        notes: document.getElementById('r-notes').value.trim(),
+      };
+      const all = this.records();
+      const idx = all.findIndex(r => r.id === rec.id);
+      if (idx >= 0) all[idx] = rec; else all.push(rec);
+      this.saveRecords(all);
+      back();
+      this.sync('upsertApplianceRecord', Sheets.applianceRecordToRow(rec), existing ? '已儲存紀錄' : `已記錄「${title}」`);
+    });
+
+    document.getElementById('r-delete')?.addEventListener('click', () => {
+      if (!confirm('確定要刪除這筆紀錄嗎?')) return;
+      this.saveRecords(this.records().filter(r => r.id !== existing.id));
+      back();
+      this.sync('deleteApplianceRecord', { id: existing.id });
+      toast('已刪除');
     });
   },
 };
