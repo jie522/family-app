@@ -41,10 +41,10 @@ const Store = {
   KEYS: {
     shows: 'fam.shows', stocks: 'fam.stocks', appliances: 'fam.appliances', settings: 'fam.settings', pendingSync: 'fam.pendingSync',
     foodPlaces: 'fam.foodPlaces', foodVisits: 'fam.foodVisits', foodPrompt: 'fam.foodPrompt',
-    applianceRecords: 'fam.applianceRecords',
+    applianceRecords: 'fam.applianceRecords', tickets: 'fam.tickets',
   },
   // 美食紀錄可以附照片,跟家電一樣存 IndexedDB;店家清單跟著放一起,兩邊讀得到的時機才一致
-  IDB_KEYS: ['appliances', 'applianceRecords', 'foodPlaces', 'foodVisits'],
+  IDB_KEYS: ['appliances', 'applianceRecords', 'foodPlaces', 'foodVisits', 'tickets'], // 票券也帶照片
   cache: {},
   idbOk: false,
 
@@ -100,6 +100,7 @@ const Store = {
       applianceRecords: this.load('applianceRecords', []),
       foodPlaces: this.load('foodPlaces', []),
       foodVisits: this.load('foodVisits', []),
+      tickets: this.load('tickets', []),
       settings: this.load('settings', {}),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -123,6 +124,7 @@ const Store = {
         if (Array.isArray(data.applianceRecords)) this.save('applianceRecords', data.applianceRecords);
         if (Array.isArray(data.foodPlaces)) this.save('foodPlaces', data.foodPlaces);
         if (Array.isArray(data.foodVisits)) this.save('foodVisits', data.foodVisits);
+        if (Array.isArray(data.tickets)) this.save('tickets', data.tickets);
         if (data.settings) this.save('settings', data.settings);
         done(true);
       } catch {

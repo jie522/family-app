@@ -68,6 +68,7 @@ const Knowledge = {
         if (tracked) {
           Stocks.openDetail(code);
         } else {
+          switchStockView('list'); // 切回追蹤清單,按右上角＋就能搜尋加入
           const name = Stocks.quote(code)?.n;
           toast(name ? `尚未追蹤 ${name},到「股票」頁搜尋 ${code} 加入看看` : `尚未追蹤這檔股票(${code})`);
         }

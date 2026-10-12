@@ -18,6 +18,8 @@ const Sheets = {
   FOOD_VISIT_TAB: '美食紀錄', FOOD_VISIT_HEADERS01: ['編號', '店家編號'],
   FOOD_STATUS_ZH: { want: '想吃', been: '吃過' },
   APPLIANCE_REC_TAB: '家電維修紀錄', APPLIANCE_REC_HEADERS01: ['編號', '家電編號'],
+  TICKET_TAB: '票券', TICKET_HEADERS01: ['編號', '名稱'],
+  TICKET_STATUS_ZH: { unused: '未使用', used: '已使用' },
 
   // 附件(收據/保固卡等文件照)常常壓縮完還是超過 Sheet 單一儲存格 5 萬字元上限,
   // 不夠塞就沒辦法看清楚小字——所以每個附件拆成好幾格存,合起來的預算才夠留住解析度。
@@ -27,6 +29,8 @@ const Sheets = {
 
   // 維修紀錄的照片(最多 2 張,每張拆 REC_PHOTO_CHUNKS 格)。Apps Script 的 APPLIANCE_REC_PHOTO_CHUNKS 要同值
   REC_PHOTO_CHUNKS: 4, MAX_REC_PHOTOS: 2,
+  // 票券照片(最多 2 張,正面 + 背面條碼),每張拆 TICKET_PHOTO_CHUNKS 格。Apps Script 的 TICKET_PHOTO_CHUNKS 要同值
+  TICKET_PHOTO_CHUNKS: 4, MAX_TICKET_PHOTOS: 2,
 
   splitAttachment(str, chunks = this.ATT_CHUNKS) {
     const s = str || '';
@@ -39,7 +43,7 @@ const Sheets = {
     return (parts || []).join('');
   },
 
-  SCRIPT_VERSION: 21, // 對應 apps-script/Code.gs 的 VERSION;App 需要的最低版本
+  SCRIPT_VERSION: 22, // 對應 apps-script/Code.gs 的 VERSION;App 需要的最低版本
   scriptOld: null,    // 偵測到的舊版版本號(null 代表沒問題或還沒檢查)
 
   /* 每次開啟 App 檢查一次:部署的 Apps Script 比 App 需要的舊,新功能就不會寫進 Sheet,
@@ -72,6 +76,7 @@ const Sheets = {
       ['家電維修紀錄', () => this.fetchPairedTab(this.APPLIANCE_REC_TAB, this.APPLIANCE_REC_HEADERS01)],
       ['美食地圖', () => this.fetchPairedTab(this.FOOD_PLACE_TAB, this.FOOD_PLACE_HEADERS01)],
       ['美食紀錄', () => this.fetchPairedTab(this.FOOD_VISIT_TAB, this.FOOD_VISIT_HEADERS01)],
+      ['票券', () => this.fetchPairedTab(this.TICKET_TAB, this.TICKET_HEADERS01)],
     ];
     for (const [name, fn] of tabs) {
       let rows = null;
@@ -345,6 +350,19 @@ const Sheets = {
           : [],
       })).filter(r => r.applianceId));
     }
+    // 票券:編號,名稱,分類,到期日,狀態,備註,照片1-1…2-4
+    const ticketRows = await this.fetchPairedTab(this.TICKET_TAB, this.TICKET_HEADERS01);
+    if (ticketRows) {
+      const pc = this.TICKET_PHOTO_CHUNKS;
+      save('tickets', ticketRows.slice(1).map(([id, name, category, expiry, statusZh, notes, ...rest], i) => ({
+        id: (id || '').trim() || ('k' + i), name: (name || '').trim(),
+        category: category || '', expiry: expiry ? this.normDate(expiry) : '',
+        status: statusZh === this.TICKET_STATUS_ZH.used ? 'used' : 'unused',
+        notes: notes || '',
+        photos: [0, 1].map(n => this.joinAttachment(rest.slice(n * pc, (n + 1) * pc))).filter(Boolean),
+        addedAt: i + 1,
+      })).filter(t => t.name));
+    }
 
     const s = this.settings();
     s.lastSync = new Date().toISOString();
@@ -380,13 +398,14 @@ const Sheets = {
     upsertApplianceRecord: 'applianceRecords', deleteApplianceRecord: 'applianceRecords',
     upsertFoodPlace: 'foodPlaces', deleteFoodPlace: 'foodPlaces',
     upsertFoodVisit: 'foodVisits', deleteFoodVisit: 'foodVisits',
+    upsertTicket: 'tickets', deleteTicket: 'tickets',
   },
 
   /* 待送佇列裡還有變更的資料集 */
   heldKeys() {
     const keys = new Set();
     for (const p of Store.load(this.pendingKey, [])) {
-      if (p.action === 'bulk') ['shows', 'stocks', 'appliances', 'applianceRecords', 'foodPlaces', 'foodVisits'].forEach(k => keys.add(k));
+      if (p.action === 'bulk') ['shows', 'stocks', 'appliances', 'applianceRecords', 'foodPlaces', 'foodVisits', 'tickets'].forEach(k => keys.add(k));
       const k = this.PENDING_KEY_OF[p.action];
       if (k) keys.add(k);
       if (p.action === 'deleteAppliance') keys.add('applianceRecords'); // 刪家電會連動刪紀錄
@@ -428,6 +447,7 @@ const Sheets = {
     upsertAppliance: { ref: 'applianceId', key: 'appliances', toRow: a => Sheets.applianceToRow(a) },
     upsertApplianceRecord: { ref: 'applianceRecordId', key: 'applianceRecords', toRow: r => Sheets.applianceRecordToRow(r) },
     upsertFoodVisit: { ref: 'foodVisitId', key: 'foodVisits', toRow: v => Sheets.foodVisitToRow(v) },
+    upsertTicket: { ref: 'ticketId', key: 'tickets', toRow: t => Sheets.ticketToRow(t) },
   },
 
   pendingEntry(id, action, data) {
@@ -529,6 +549,17 @@ const Sheets = {
     return row;
   },
 
+  ticketToRow(t) {
+    const row = {
+      id: t.id, name: t.name || '', category: t.category || '', expiry: t.expiry || '',
+      status: this.TICKET_STATUS_ZH[t.status] || this.TICKET_STATUS_ZH.unused, notes: t.notes || '',
+    };
+    [0, 1].forEach(i => {
+      this.splitAttachment((t.photos || [])[i], this.TICKET_PHOTO_CHUNKS).forEach((chunk, p) => { row[`photo${i + 1}_${p + 1}`] = chunk; });
+    });
+    return row;
+  },
+
   /* 新增類的動作:送出後明確告訴使用者有沒有同步到雲端。
    * 以前成功時完全沒有任何提示,使用者分不出「有同步」還是「只存在手機」。 */
   async pushNotify(action, data, msg) {
@@ -584,6 +615,7 @@ const Sheets = {
     const foodPlaces = Store.load('foodPlaces', []).map(p => this.foodPlaceToRow(p));
     const foodVisits = Store.load('foodVisits', []).map(v => this.foodVisitToRow(v));
     const applianceRecords = Store.load('applianceRecords', []).map(r => this.applianceRecordToRow(r));
-    return this.push('bulk', { shows, logs, stocks, appliances, foodPlaces, foodVisits, applianceRecords });
+    const tickets = Store.load('tickets', []).map(t => this.ticketToRow(t));
+    return this.push('bulk', { shows, logs, stocks, appliances, foodPlaces, foodVisits, applianceRecords, tickets });
   },
 };

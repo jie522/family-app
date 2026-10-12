@@ -195,6 +195,16 @@ main { padding: 0 14px; max-width: 720px; margin: 0 auto; }
    改成跟股票漲跌列一致的左側色條 + 淡色背景 + 品名加刪除線,對比更清楚 */
 .appliance-row.retired { border-left-color: var(--up); background: rgba(224,52,47,.06); }
 .appliance-row.retired .appliance-row-title { text-decoration: line-through; color: var(--text2); }
+/* ============ 票券 ============ */
+/* 30 天內到期:跟股票列一樣用左側色條提醒(黃色),一眼看出要趕快用掉 */
+.ticket-row.soon { border-left-color: #f5a623; background: rgba(245,166,35,.07); }
+.ticket-photos { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.ticket-photos img { width: 100%; border-radius: 10px; display: block; background: var(--accent-soft); cursor: zoom-in; }
+.ticket-notes { font-size: 14px; line-height: 1.6; white-space: pre-wrap; margin: 0; }
+.ticket-expiry-row { display: flex; gap: 8px; align-items: center; }
+.ticket-expiry-row input { flex: 1; min-width: 0; }
+.ticket-expiry-row .btn { flex-shrink: 0; }
+
 .detail-photo-wrap { position: relative; width: 110px; flex-shrink: 0; }
 .detail-photo {
   width: 110px; aspect-ratio: 4/3; object-fit: cover; border-radius: 10px;

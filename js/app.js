@@ -43,11 +43,12 @@ const PAGES = {
   shows: { title: '追劇清單', add: () => Shows.openAdd() },
   appliances: { title: '家電清單', add: () => Appliances.openAdd() },
   food: { title: '美食地圖', add: () => Food.openAdd() },
-  knowledge: { title: '知識庫', add: null },
+  tickets: { title: '票券', add: () => Tickets.openAdd() },
   settings: { title: '設定', add: null },
 };
 let currentPage = 'stocks';
 let knowledgeLoaded = false;
+let stockView = 'list'; // 股票頁裡的子畫面:list(追蹤清單)/ knowledge(知識庫)
 
 function switchPage(page) {
   currentPage = page;
@@ -56,13 +57,27 @@ function switchPage(page) {
   document.querySelectorAll('.page').forEach(p =>
     p.classList.toggle('active', p.id === 'page-' + page));
   document.getElementById('header-title').textContent = PAGES[page].title;
-  document.getElementById('header-action').classList.toggle('hidden', !PAGES[page].add);
-  if (page === 'knowledge' && !knowledgeLoaded) {
+  // 知識庫沒有「新增」可按,切到知識庫時右上角＋先藏起來
+  const noAdd = !PAGES[page].add || (page === 'stocks' && stockView === 'knowledge');
+  document.getElementById('header-action').classList.toggle('hidden', noAdd);
+  if (page === 'food') Food.onShow(); // 每次打開都重新定位,看看是不是人就在哪間店附近
+}
+
+/* ---------- 股票頁:追蹤清單 / 知識庫切換(知識庫是台股題材的產業知識,所以放在股票底下) ---------- */
+function switchStockView(view) {
+  stockView = view;
+  document.querySelectorAll('#stock-view button').forEach(b =>
+    b.classList.toggle('active', b.dataset.view === view));
+  document.getElementById('stock-view-list').classList.toggle('hidden', view !== 'list');
+  document.getElementById('stock-view-knowledge').classList.toggle('hidden', view !== 'knowledge');
+  if (view === 'knowledge' && !knowledgeLoaded) {
     knowledgeLoaded = true;
     Knowledge.render();
   }
-  if (page === 'food') Food.onShow(); // 每次打開都重新定位,看看是不是人就在哪間店附近
+  if (currentPage === 'stocks') switchPage('stocks'); // 更新右上角＋要不要顯示
 }
+document.querySelectorAll('#stock-view button').forEach(btn =>
+  btn.addEventListener('click', () => switchStockView(btn.dataset.view)));
 
 document.querySelectorAll('.tab').forEach(tab =>
   tab.addEventListener('click', () => switchPage(tab.dataset.page)));
@@ -90,6 +105,17 @@ document.getElementById('show-search').addEventListener('input', e => {
 document.getElementById('appliance-search').addEventListener('input', e => {
   Appliances.search = e.target.value;
   Appliances.render();
+});
+
+/* ---------- 票券:可使用/已過期/已使用/全部切換、搜尋 ---------- */
+document.querySelectorAll('#ticket-filter button').forEach(btn =>
+  btn.addEventListener('click', () => {
+    Tickets.filter = btn.dataset.f;
+    Tickets.render();
+  }));
+document.getElementById('ticket-search').addEventListener('input', e => {
+  Tickets.search = e.target.value;
+  Tickets.render();
 });
 
 /* ---------- 美食地圖:地圖/想吃/吃過/紀錄切換、搜尋、定位 ---------- */
@@ -145,7 +171,7 @@ function refreshSyncStatus() {
     const t = s.lastSync ? new Date(s.lastSync).toLocaleString('zh-TW') : '尚未同步';
     syncStatus.textContent = `✅ 同步已啟用,上次讀取:${t}`;
     if (Sheets.scriptOld != null) syncStatus.textContent += `
-⚠️ Apps Script 是舊版 v${Sheets.scriptOld},需要 v${Sheets.SCRIPT_VERSION}:新功能(家電附件/維修紀錄/美食地圖)不會寫進 Sheet,請重新部署`;
+⚠️ Apps Script 是舊版 v${Sheets.scriptOld},需要 v${Sheets.SCRIPT_VERSION}:新功能(家電附件/維修紀錄/美食地圖/票券)不會寫進 Sheet,請重新部署`;
   } else {
     syncStatus.textContent = '尚未啟用,目前資料只存在這支手機';
   }
@@ -161,6 +187,7 @@ async function pullAndRender(quiet) {
     Stocks.render();
     Appliances.render();
     Food.render();
+    Tickets.render();
     refreshSyncStatus();
     return true;
   } catch {
@@ -209,8 +236,9 @@ document.getElementById('save-script').addEventListener('click', async () => {
   const localStocks = Store.load('stocks', []);
   const localAppliances = Store.load('appliances', []);
   const localFood = Store.load('foodPlaces', []);
-  const total = localShows.length + localStocks.length + localAppliances.length + localFood.length;
-  if (total && confirm(`連線成功!要把這支手機現有的 ${localShows.length} 部劇 + ${localStocks.length} 檔股票 + ${localAppliances.length} 項家電 + ${localFood.length} 間美食店家上傳到 Google Sheet 嗎?\n(家人的手機第一次啟用時選「取消」就好)`)) {
+  const localTickets = Store.load('tickets', []);
+  const total = localShows.length + localStocks.length + localAppliances.length + localFood.length + localTickets.length;
+  if (total && confirm(`連線成功!要把這支手機現有的 ${localShows.length} 部劇 + ${localStocks.length} 檔股票 + ${localAppliances.length} 項家電 + ${localFood.length} 間美食店家 + ${localTickets.length} 張票券上傳到 Google Sheet 嗎?\n(家人的手機第一次啟用時選「取消」就好)`)) {
     syncStatus.textContent = '上傳中…';
     await Sheets.bulkUpload();
   }
@@ -245,6 +273,7 @@ document.getElementById('import-file').addEventListener('change', e => {
       Stocks.render();
       Appliances.render();
       Food.render();
+      Tickets.render();
       refreshTmdbStatus();
       toast('匯入成功!');
     } else {
@@ -265,5 +294,6 @@ Store.init().then(() => {
   Sheets.compactPending();
   Appliances.render();
   Food.render();
+  Tickets.render();
   if (Sheets.enabled()) pullAndRender();   // 再從 Google Sheet 抓最新資料
 });

@@ -36,7 +36,7 @@ App 的股票詳情頁用「公司簡介/產業知識/分析報告」**三個頁
 
 ### 公開知識庫(App 裡的「知識庫」頁籤)
 
-`knowledge/` 資料夾是**公開版**的產業知識與投資框架,會推上 GitHub、顯示在 App 底部導覽「📚 知識庫」頁籤裡,是獨立的全域頁面(不綁定單一股票)。跟 `Wiki/Concepts/` 的差異:
+`knowledge/` 資料夾是**公開版**的產業知識與投資框架,會推上 GitHub、顯示在 App「股票」頁上方的「📚 知識庫」切換裡(跟追蹤清單並列,2026-10-11 從底部導覽移進股票頁),不綁定單一股票。跟 `Wiki/Concepts/` 的差異:
 
 - `Wiki/Concepts/<概念>.md` — 私人版,可以有比較細的個人判斷、日期戳記的推論過程,不公開
 - `knowledge/<slug>.md` — 公開版,拿掉 Obsidian 的 `[[雙向連結]]`語法和 YAML frontmatter,改寫成全家都看得懂的口吻;`knowledge/manifest.json` 是索引(`[{slug,title,summary}, ...]`)

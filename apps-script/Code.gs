@@ -14,7 +14,7 @@
  *    存檔即可,不用重新部署。金鑰只存在這裡,不會出現在原始碼或 GitHub 上。
  */
 
-var VERSION = 21; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
+var VERSION = 22; // 每次改這份檔案就 +1,ping 會回傳,用來確認部署的是新版
 
 var SHOW_TAB = '劇集庫';
 var SHOW_HEADERS = ['劇名', '平台', '狀態', '評分', '筆記', '海報', '年份', '類型', '簡介', 'TMDBID', '開始追劇日期', '更新時間'];
@@ -56,6 +56,17 @@ var FOOD_PLACE_TAB = '美食地圖';
 var FOOD_PLACE_HEADERS = ['編號', '店名', '分類', '狀態', '想吃什麼', '地址', '座標', '連結', '更新時間'];
 var FOOD_VISIT_TAB = '美食紀錄';
 var FOOD_VISIT_HEADERS = ['編號', '店家編號', '日期', '時間', '吃了什麼', '評分', '花費', '跟誰', '心得', '照片1', '照片2', '更新時間'];
+// 票券:電影票/餐券/禮券…拍照存起來,每張最多 2 張照片,每張拆 TICKET_PHOTO_CHUNKS 格;要跟 App 的 Sheets.TICKET_PHOTO_CHUNKS 同值
+var TICKET_TAB = '票券';
+var TICKET_PHOTO_CHUNKS = 4;
+var TICKET_HEADERS = (function () {
+  var headers = ['編號', '名稱', '分類', '到期日', '狀態', '備註'];
+  for (var n = 1; n <= 2; n++) {
+    for (var p = 1; p <= TICKET_PHOTO_CHUNKS; p++) headers.push('照片' + n + '-' + p);
+  }
+  headers.push('更新時間');
+  return headers;
+})();
 
 function logSheet() {
   return SpreadsheetApp.getActiveSpreadsheet().getSheets()[0]; // 第一個分頁:日期,劇名,平台,備註
@@ -138,6 +149,18 @@ function foodVisitSheet() {
   return sh;
 }
 
+function ticketSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(TICKET_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(TICKET_TAB);
+    sh.appendRow(TICKET_HEADERS);
+    sh.setFrozenRows(1);
+  }
+  sh.getRange(1, 1, sh.getMaxRows(), TICKET_HEADERS.length - 1).setNumberFormat('@'); // 全部強制純文字:到期日不被轉成日期物件、照片拆格的 base64 開頭是 + = 也不會被當公式
+  return sh;
+}
+
 function reportSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(REPORT_TAB);
@@ -188,6 +211,8 @@ function handle(action, d) {
     case 'deleteFoodPlace': deleteFoodPlace(d); return { ok: true };
     case 'upsertFoodVisit': upsertFoodVisit(d); return { ok: true };
     case 'deleteFoodVisit': deleteFoodVisit(d); return { ok: true };
+    case 'upsertTicket': upsertTicket(d); return { ok: true };
+    case 'deleteTicket': deleteTicket(d); return { ok: true };
     case 'tmdbSearch': return tmdbSearch(d);
     case 'quotes':     return quotes(d);
     case 'upsertReport': upsertReport(d); return { ok: true };
@@ -386,6 +411,20 @@ function deleteFoodVisit(d) {
   deleteWhere(foodVisitSheet(), 0, d.id);
 }
 
+/* ---------- 票券 ---------- */
+function upsertTicket(d) {
+  var row = [d.id || '', d.name || '', d.category || '', d.expiry || '', d.status || '未使用', d.notes || ''];
+  for (var n = 1; n <= 2; n++) {
+    for (var p = 1; p <= TICKET_PHOTO_CHUNKS; p++) row.push(d['photo' + n + '_' + p] || '');
+  }
+  row.push(new Date());
+  upsertById(ticketSheet(), TICKET_HEADERS.length, d.id, row);
+}
+
+function deleteTicket(d) {
+  deleteWhere(ticketSheet(), 0, d.id);
+}
+
 /* ---------- 股票分析報告(reports/ 資料夾內容的雲端鏡像) ---------- */
 function reportRowValues(d) {
   return [d.code || '', d.date || '', d.title || '', d.content || '', new Date()];
@@ -579,4 +618,5 @@ function bulk(d) {
   (d.applianceRecords || []).forEach(function (r) { upsertApplianceRecord(r); });
   (d.foodPlaces || []).forEach(function (p) { upsertFoodPlace(p); });
   (d.foodVisits || []).forEach(function (v) { upsertFoodVisit(v); });
+  (d.tickets || []).forEach(function (t) { upsertTicket(t); });
 }
